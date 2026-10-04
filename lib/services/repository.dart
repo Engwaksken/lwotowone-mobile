@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+import 'api_config.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -16,15 +19,16 @@ class ApiFailure implements Exception {
 }
 
 class Repository extends ChangeNotifier {
-  static const base = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'https://example.com/api',
-  );
+  static const base = ApiConfig.base;
   final http.Client client;
   final FlutterSecureStorage secure;
-  Repository({http.Client? client, FlutterSecureStorage? secure})
-    : client = client ?? http.Client(),
-      secure = secure ?? const FlutterSecureStorage();
+  final String baseUrl;
+  Repository({
+    http.Client? client,
+    FlutterSecureStorage? secure,
+    this.baseUrl = base,
+  }) : client = client ?? http.Client(),
+       secure = secure ?? const FlutterSecureStorage();
   String? token;
   Map<String, dynamic> data = {};
   List<Map<String, dynamic>> pending = [];
@@ -75,7 +79,9 @@ class Repository extends ChangeNotifier {
     String path, [
     Map<String, dynamic>? body,
   ]) async {
-    final uri = Uri.parse('$base$path');
+    final problem = ApiConfig.validate(baseUrl);
+    if (problem != null) throw ApiFailure(problem, 0);
+    final uri = Uri.parse('$baseUrl$path');
     final headers = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
@@ -251,6 +257,8 @@ class Repository extends ChangeNotifier {
   }
 
   Future<File> downloadResource(int id) async {
+    final problem = ApiConfig.validate(baseUrl);
+    if (problem != null) throw ApiFailure(problem, 0);
     final target = File('${directory!.path}/account_${owner}_resource_$id');
     final meta = File('${target.path}.name');
     if (meta.existsSync()) {
@@ -259,7 +267,7 @@ class Repository extends ChangeNotifier {
     }
     final response = await client
         .get(
-          Uri.parse('$base/resources/$id/download'),
+          Uri.parse('$baseUrl/resources/$id/download'),
           headers: {
             'Accept': 'application/octet-stream',
             'Authorization': 'Bearer $token',

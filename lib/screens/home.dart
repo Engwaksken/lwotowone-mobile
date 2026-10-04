@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../services/repository.dart';
+import '../services/earnings.dart';
 import 'action_form.dart';
 import 'course.dart';
 
@@ -12,6 +14,10 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> {
   String section = 'Overview', search = '';
+  EarningsPeriod earningsPeriod = EarningsPeriod.all;
+  String? enterpriseFilter;
+  DateTimeRange? earningsRange;
+  int earningsFilterRevision = 0;
   Repository get repo => widget.repo;
   final sections = const {
     'Overview': Icons.dashboard,
@@ -412,27 +418,68 @@ class _HomeState extends State<Home> {
           ),
         ];
       case 'Enterprise':
-        final tx = repo.rows('transactions');
-        final income = tx
-            .where((t) => t['type'] == 'income')
-            .fold<double>(
-              0,
-              (sum, t) => sum + (double.tryParse(t['amount'].toString()) ?? 0),
-            );
-        final expense = tx
-            .where((t) => t['type'] == 'expense')
-            .fold<double>(
-              0,
-              (sum, t) => sum + (double.tryParse(t['amount'].toString()) ?? 0),
-            );
+        final earnings = Earnings.filter(
+          repo.rows('transactions'),
+          period: earningsPeriod,
+          enterpriseId: enterpriseFilter,
+          from: earningsRange?.start,
+          to: earningsRange?.end,
+        );
+        final history = earnings.transactions.where(
+          (t) =>
+              search.isEmpty ||
+              t['description'].toString().toLowerCase().contains(
+                search.toLowerCase(),
+              ),
+        );
         return [
+          DropdownButtonFormField<EarningsPeriod>(
+            key: ValueKey('$earningsPeriod-$earningsFilterRevision'),
+            initialValue: earningsPeriod,
+            decoration: const InputDecoration(labelText: 'Reporting period'),
+            items: EarningsPeriod.values
+                .map((p) => DropdownMenuItem(value: p, child: Text(p.label)))
+                .toList(),
+            onChanged: (value) async {
+              if (value == null) return;
+              if (value == EarningsPeriod.custom) {
+                await selectDates();
+              } else {
+                setState(() => earningsPeriod = value);
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            key: ValueKey(enterpriseFilter ?? 'all-enterprises'),
+            initialValue: enterpriseFilter ?? '',
+            decoration: const InputDecoration(labelText: 'Enterprise'),
+            items: [
+              const DropdownMenuItem(value: '', child: Text('All enterprises')),
+              for (final e in repo.rows('enterprises'))
+                DropdownMenuItem(
+                  value: e['id'].toString(),
+                  child: Text(e['title']),
+                ),
+            ],
+            onChanged: (value) =>
+                setState(() => enterpriseFilter = value == '' ? null : value),
+          ),
+          if (earningsPeriod == EarningsPeriod.custom)
+            TextButton(
+              onPressed: selectDates,
+              child: Text(
+                '${earningsRange!.start.toIso8601String().substring(0, 10)} to ${earningsRange!.end.toIso8601String().substring(0, 10)}',
+              ),
+            ),
+          const SizedBox(height: 18),
           Wrap(
             spacing: 10,
             runSpacing: 10,
             children: [
-              stat('Income UGX', income.toStringAsFixed(0)),
-              stat('Expenses UGX', expense.toStringAsFixed(0)),
-              stat('Net UGX', (income - expense).toStringAsFixed(0)),
+              stat('Income UGX', earnings.income.toStringAsFixed(0)),
+              stat('Expenses UGX', earnings.expense.toStringAsFixed(0)),
+              stat('Net UGX', earnings.net.toStringAsFixed(0)),
             ],
           ),
           const SizedBox(height: 18),
@@ -466,6 +513,46 @@ class _HomeState extends State<Home> {
             (e) => card(
               e['title'],
               '${e['sector']} · ${e['stage']}\n${e['idea']}\n${e['business_plan'] ?? ''}',
+              button: TextButton(
+                onPressed: () => form(
+                  'Edit enterprise',
+                  'update-enterprise',
+                  [
+                    FormFieldSpec(
+                      'title',
+                      'Enterprise name',
+                      value: e['title'],
+                    ),
+                    FormFieldSpec('sector', 'Sector', value: e['sector']),
+                    FormFieldSpec(
+                      'idea',
+                      'Business idea',
+                      multiline: true,
+                      value: e['idea'],
+                    ),
+                    FormFieldSpec(
+                      'business_plan',
+                      'Business plan (optional)',
+                      required: false,
+                      multiline: true,
+                      value: e['business_plan'],
+                    ),
+                    FormFieldSpec(
+                      'stage',
+                      'Stage',
+                      value: e['stage'],
+                      options: const {
+                        'idea': 'Idea',
+                        'planning': 'Planning',
+                        'operating': 'Operating',
+                        'growing': 'Growing',
+                      },
+                    ),
+                  ],
+                  fixed: {'enterprise_id': e['id']},
+                ),
+                child: const Text('Edit enterprise'),
+              ),
             ),
           ),
           if (repo.rows('enterprises').isNotEmpty)
@@ -495,8 +582,13 @@ class _HomeState extends State<Home> {
               ], offline: true),
               child: const Text('Record income or expense'),
             ),
+          const Text(
+            'Totals use the reporting period and enterprise filters. Search filters transaction descriptions.',
+          ),
           heading('Transaction history'),
-          ...list('transactions').map(
+          if (history.isEmpty)
+            const Text('No transactions match these filters.'),
+          ...history.map(
             (t) => card(
               t['description'],
               '${t['occurred_on']} · ${t['type']} · UGX ${t['amount']}',
@@ -610,6 +702,24 @@ class _HomeState extends State<Home> {
         ];
       default:
         return [];
+    }
+  }
+
+  Future<void> selectDates() async {
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      initialDateRange: earningsRange,
+    );
+    if (mounted) {
+      setState(() {
+        earningsFilterRevision++;
+        if (range != null) {
+          earningsRange = range;
+          earningsPeriod = EarningsPeriod.custom;
+        }
+      });
     }
   }
 

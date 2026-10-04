@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -9,6 +10,7 @@ void main() {
     'API sends bearer credentials and exposes validation feedback',
     () async {
       final repo = Repository(
+        baseUrl: 'https://learning.test/api',
         client: MockClient((request) async {
           expect(request.headers['Authorization'], 'Bearer secret');
           return http.Response(
@@ -38,6 +40,7 @@ void main() {
   );
   test('Unexpected server response becomes a usable error', () async {
     final repo = Repository(
+      baseUrl: 'https://learning.test/api',
       client: MockClient((_) async => http.Response('<html>Error</html>', 502)),
     );
     await expectLater(

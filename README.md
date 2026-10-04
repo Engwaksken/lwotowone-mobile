@@ -57,3 +57,22 @@ Email notices are sent by the Laravel queue; mobile sees database notices on the
 - `test/`: widget and API error-handling tests.
 
 Device acceptance: register, enrol, sync, turn off data, restart the app, read a lesson, queue a log, restore data, sync, verify the server record appears once, submit work, assess it on web, then sync feedback. Also test real resource opening, session expiry, cross-account isolation, low bandwidth and store-signed secure storage. Native Android/iOS builds and physical-device testing require your build environment and release credentials.
+
+## Continued development: enterprise editing and APK automation
+
+Enterprise cards now include Edit enterprise. Participants can update their business plan and stage online, while income entries remain attached to the same enterprise. Reporting filters work offline against the latest downloaded records: enterprise, all time, week, month, year and custom dates. Search matches transaction descriptions; totals use the reporting filters.
+
+The app rejects missing, placeholder, non-HTTPS and credential-bearing API addresses before sending login details. Always provide a real API base URL ending in `/api`.
+
+For a tested local APK build in PowerShell:
+
+```powershell
+cd D:\projects\lwotowone-mobile
+.\scripts\build-apk.ps1 -ApiBaseUrl 'https://YOUR-ACTUAL-DOMAIN/api'
+```
+
+Replace the URL. The script checks dependencies, analysis and tests before building. Add `-RequireReleaseKey` to require production signing. Copy `android/key.properties.example` to `android/key.properties`, set your real key details and keep the keystore outside source control. Gradle uses the configured upload key when present; without it, local release builds still use debug signing for testing and the script says so.
+
+After merging the workflow into the default branch, open GitHub **Actions → Flutter checks and test APK → Run workflow**. Enter your actual HTTPS API URL. The manual run builds a debug-signed test APK and uploads `lwotowone-test-apk`. Pushes and pull requests run analysis and tests without publishing an APK. This workflow does not publish to an app store.
+
+The workflow pins Flutter 3.47.6. Production APK signing and physical-device acceptance remain separate from the test artifact. Official signing reference: https://docs.flutter.dev/deployment/android

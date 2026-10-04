@@ -46,3 +46,9 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Local signing credentials
+/android/key.properties
+*.jks
+*.keystore
+/config/app.local.json

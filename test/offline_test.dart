@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -19,6 +20,7 @@ void main() {
         'owner': '7',
       });
       final offline = Repository(
+        baseUrl: 'https://learning.test/api',
         client: MockClient((_) async => throw const SocketException('Offline')),
       );
       await offline.init(storageDirectory: directory);
@@ -34,6 +36,7 @@ void main() {
       offline.dispose();
       var sent = 0;
       final online = Repository(
+        baseUrl: 'https://learning.test/api',
         client: MockClient((request) async {
           if (request.method == 'POST') {
             sent++;
@@ -64,6 +67,7 @@ void main() {
       );
       FlutterSecureStorage.setMockInitialValues({'token': 'a', 'owner': '1'});
       final first = Repository(
+        baseUrl: 'https://learning.test/api',
         client: MockClient(
           (r) async => r.method == 'POST'
               ? http.Response(
@@ -78,7 +82,7 @@ void main() {
       expect(first.pending.single['error'], 'Check your duration.');
       first.dispose();
       FlutterSecureStorage.setMockInitialValues({'token': 'b', 'owner': '2'});
-      final second = Repository();
+      final second = Repository(baseUrl: 'https://learning.test/api');
       await second.init(storageDirectory: directory);
       expect(second.pending, isEmpty);
       expect(second.data, isEmpty);

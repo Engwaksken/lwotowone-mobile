@@ -7,7 +7,7 @@ void main() {
   testWidgets(
     'Every participant section renders with an empty downloaded account',
     (tester) async {
-      final repo = Repository();
+      final repo = Repository(baseUrl: 'https://learning.test/api');
       repo.data = {
         'user': {'id': 1, 'name': 'Learner', 'email': 'learner@example.test'},
       };
