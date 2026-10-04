@@ -1,0 +1,59 @@
+# Lwotowone — Flutter participant app
+
+Separate Android/iOS source project connected to the Laravel CMS and learning API. Generated native projects are included. This package contains source, not a signed APK or IPA.
+
+## Screens and functions
+
+Participant login/registration, overview, searchable course catalogue, enrolment, downloaded lessons, protected resource downloads, written assignment submissions, practical activity logs, mentor profiles and booking requests, opportunities/applications, enterprise plans, income/expense records, events, email/in-app notice inbox, profile and pending synchronisation screen.
+
+## Run on Windows / Android
+
+Install Flutter, Android Studio/JDK and Android SDK. This build was analysed and tested with Flutter 3.47.6 / Dart 3.13.5. In the extracted `lwotowone-mobile` directory:
+
+```powershell
+flutter pub get
+flutter analyze
+flutter test
+flutter run --dart-define=API_BASE_URL=https://YOUR-DOMAIN/api
+```
+
+Set a reachable HTTPS API base URL; `https://example.com/api` is intentionally a placeholder. Run the Laravel migrations and seed administrator first, then publish courses and register a participant. Administrators and staff use the web portal; mobile login is participant-only.
+
+An Android emulator's host PC is typically reachable at `10.0.2.2`, but release builds use HTTPS. For a physical phone, deploy the API or use a reachable development HTTPS endpoint. Never enable broad cleartext traffic in a production release.
+
+## Build
+
+```powershell
+flutter build apk --release --dart-define=API_BASE_URL=https://YOUR-DOMAIN/api
+flutter build appbundle --release --dart-define=API_BASE_URL=https://YOUR-DOMAIN/api
+```
+
+Before distribution, review the included green-and-gold L lettermark or replace it with your approved brand icon, configure Android release signing (the generated project initially uses debug signing), review the application ID `ug.co.lwotowone.lwotowone_mobile`, and configure store metadata. For iOS, use macOS, CocoaPods and Xcode, choose your team and provisioning, then run `flutter build ipa` with the same API define. Review iOS bundle identifier and secure-storage keychain entitlements for your signing configuration.
+
+## Offline behaviour
+
+- First sign-in and enrolment need internet.
+- Synchronise from the toolbar or pull to refresh. Opening the main screen also requests a sync.
+- Course lesson text and account records persist in app-private storage. Tokens use OS secure storage.
+- Resources download only when tapped and can then reopen offline. Videos remain external links and require internet.
+- Lesson completion, written assignments, practical logs and income/expense records can be queued offline.
+- The queue persists across app restarts. UUIDs prevent server duplication after retry.
+- A validation failure remains in Pending with the server's message. Retry or discard it; to change the contents, discard the failed item and submit a corrected one.
+- Enrolment, mentor bookings, applications, new enterprises, event registrations and profile changes need an online server response.
+- A pending action counts as saved locally until the server accepts it. The main dashboard reflects the last server snapshot rather than speculative totals.
+- Sign out requires internet to revoke the token, clears account cache/resources and blocks while unsent work exists. Synchronise or individually discard pending work first.
+- Expired tokens return to sign-in while retaining pending work for the same account. Signing into another account does not load the previous account's cache.
+- Text/records are refreshed in a full snapshot; videos are not preloaded. The app has no automatic background sync and no device push integration.
+
+Email notices are sent by the Laravel queue; mobile sees database notices on the next sync. The app does not deliver remote notifications while a device has no connectivity. Financial records are self-entered and do not process payments.
+
+## Source map
+
+- `lib/services/repository.dart`: API, token storage, snapshot persistence, offline queue, resource downloads.
+- `lib/screens/login.dart`: participant sign-in, registration, terms and password reset link.
+- `lib/screens/home.dart`: dashboard and participant module screens.
+- `lib/screens/course.dart`: lessons, resources, submissions and web certificate link.
+- `lib/screens/action_form.dart`: validated participant action forms.
+- `test/`: widget and API error-handling tests.
+
+Device acceptance: register, enrol, sync, turn off data, restart the app, read a lesson, queue a log, restore data, sync, verify the server record appears once, submit work, assess it on web, then sync feedback. Also test real resource opening, session expiry, cross-account isolation, low bandwidth and store-signed secure storage. Native Android/iOS builds and physical-device testing require your build environment and release credentials.
