@@ -274,6 +274,11 @@ class Repository extends ChangeNotifier {
 
   Future<void> profile(Map<String, dynamic> fields) async {
     await request('POST', '/profile', fields);
+    final user = Map<String, dynamic>.from(data['user'] as Map? ?? {});
+    user.addAll(fields);
+    data['user'] = user;
+    await _save('snapshot', data);
+    notifyListeners();
     await sync();
   }
 
