@@ -1,0 +1,4 @@
+storeFile=C:/Users/YOUR-NAME/upload-keystore.jks
+storePassword=REPLACE_LOCALLY
+keyAlias=upload
+keyPassword=REPLACE_LOCALLY

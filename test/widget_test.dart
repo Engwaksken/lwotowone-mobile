@@ -7,7 +7,7 @@ void main() {
   testWidgets('Participant login validates empty email and password', (
     tester,
   ) async {
-    final repo = Repository();
+    final repo = Repository(baseUrl: 'https://learning.test/api');
     await tester.pumpWidget(MaterialApp(home: Login(repo: repo)));
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
     await tester.pump();

@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+import 'api_config.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -16,15 +19,16 @@ class ApiFailure implements Exception {
 }
 
 class Repository extends ChangeNotifier {
-  static const base = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'https://example.com/api',
-  );
+  static const base = ApiConfig.base;
   final http.Client client;
   final FlutterSecureStorage secure;
-  Repository({http.Client? client, FlutterSecureStorage? secure})
-    : client = client ?? http.Client(),
-      secure = secure ?? const FlutterSecureStorage();
+  final String baseUrl;
+  Repository({
+    http.Client? client,
+    FlutterSecureStorage? secure,
+    this.baseUrl = base,
+  }) : client = client ?? http.Client(),
+       secure = secure ?? const FlutterSecureStorage();
   String? token;
   Map<String, dynamic> data = {};
   List<Map<String, dynamic>> pending = [];
@@ -75,7 +79,9 @@ class Repository extends ChangeNotifier {
     String path, [
     Map<String, dynamic>? body,
   ]) async {
-    final uri = Uri.parse('$base$path');
+    final problem = ApiConfig.validate(baseUrl);
+    if (problem != null) throw ApiFailure(problem, 0);
+    final uri = Uri.parse('$baseUrl$path');
     final headers = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
@@ -131,7 +137,7 @@ class Repository extends ChangeNotifier {
     return value;
   }
 
-  Future<void> authenticate(
+  Future<String?> authenticate(
     Map<String, dynamic> fields, {
     bool register = false,
   }) async {
@@ -140,8 +146,19 @@ class Repository extends ChangeNotifier {
       register ? '/register' : '/login',
       fields,
     );
-    token = result['token'] as String;
-    owner = (result['user']['id']).toString();
+    if (register && result['token'] == null) {
+      return result['message']?.toString() ??
+          'Account created. Verify your email before signing in.';
+    }
+    final resultToken = result['token'];
+    final resultUser = result['user'];
+    if (resultToken is! String ||
+        resultUser is! Map ||
+        resultUser['id'] == null) {
+      throw ApiFailure('The server returned incomplete sign-in details.', 0);
+    }
+    token = resultToken;
+    owner = resultUser['id'].toString();
     await secure.write(key: 'token', value: token);
     await secure.write(key: 'owner', value: owner);
     data = await _loadMap('snapshot');
@@ -153,6 +170,7 @@ class Repository extends ChangeNotifier {
         .toList();
     notifyListeners();
     await sync();
+    return null;
   }
 
   Future<void> sync() async {
@@ -185,9 +203,23 @@ class Repository extends ChangeNotifier {
       }
       data = await request('GET', '/snapshot');
       await _save('snapshot', data);
+      var contentDownloadFailures = 0;
+      for (final type in ['lessons', 'resources']) {
+        for (final item in rows(type)) {
+          final url = item['download_url']?.toString();
+          if (item['locked'] == true || url == null || url.isEmpty) continue;
+          try {
+            await _cacheLearningFile(type, item['id'].toString(), url);
+          } catch (_) {
+            contentDownloadFailures++;
+          }
+        }
+      }
       online = true;
-      message = pending.isEmpty
-          ? 'Synchronised successfully.'
+      message = contentDownloadFailures > 0
+          ? 'Synced, but $contentDownloadFailures learning file(s) could not be downloaded. Retry while connected.'
+          : pending.isEmpty
+          ? 'Synchronised successfully. Authorized lessons and resources are ready offline.'
           : 'Some pending work needs your attention.';
     } on ApiFailure catch (e) {
       online = false;
@@ -251,15 +283,48 @@ class Repository extends ChangeNotifier {
   }
 
   Future<File> downloadResource(int id) async {
-    final target = File('${directory!.path}/account_${owner}_resource_$id');
+    final cached = await cachedLearningFile('resources', id.toString());
+    if (cached != null) return cached;
+    final file = await _cacheLearningFile(
+      'resources',
+      id.toString(),
+      '$baseUrl/resources/$id/download',
+    );
+    return file;
+  }
+
+  Future<File?> cachedLearningFile(String type, String id) async {
+    if (!hasCachedLearningFile(type, id)) return null;
+    final target = File('${directory!.path}/account_${owner}_${type}_$id');
     final meta = File('${target.path}.name');
-    if (meta.existsSync()) {
-      final cached = File('${target.path}_${await meta.readAsString()}');
-      if (cached.existsSync()) return cached;
+    return File('${target.path}_${await meta.readAsString()}');
+  }
+
+  bool hasCachedLearningFile(String type, String id) {
+    if (directory == null || owner == null) return false;
+    final target = File('${directory!.path}/account_${owner}_${type}_$id');
+    final meta = File('${target.path}.name');
+    if (!meta.existsSync()) return false;
+    return File('${target.path}_${meta.readAsStringSync()}').existsSync();
+  }
+
+  Future<File> _cacheLearningFile(String type, String id, String url) async {
+    final problem = ApiConfig.validate(baseUrl);
+    if (problem != null) throw ApiFailure(problem, 0);
+    final cached = await cachedLearningFile(type, id);
+    if (cached != null) return cached;
+    final uri = Uri.tryParse(url);
+    final baseUri = Uri.parse(baseUrl);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.origin != baseUri.origin ||
+        uri.userInfo.isNotEmpty ||
+        !uri.path.startsWith('/api/')) {
+      throw ApiFailure('The learning file address is invalid.', 0);
     }
     final response = await client
         .get(
-          Uri.parse('$base/resources/$id/download'),
+          uri,
           headers: {
             'Accept': 'application/octet-stream',
             'Authorization': 'Bearer $token',
@@ -268,16 +333,18 @@ class Repository extends ChangeNotifier {
         .timeout(const Duration(seconds: 45));
     if (response.statusCode != 200) {
       throw ApiFailure(
-        'Download failed. Check enrolment and connection.',
+        'Learning file download failed. Check course access and connection.',
         response.statusCode,
       );
     }
     final disposition = response.headers['content-disposition'] ?? '';
     final match = RegExp(r'filename="?([^";]+)').firstMatch(disposition);
-    final name = (match?.group(1) ?? 'resource.pdf').replaceAll(
-      RegExp(r'[^a-zA-Z0-9._-]'),
-      '_',
-    );
+    final uriName = uri.pathSegments.isEmpty ? '' : uri.pathSegments.last;
+    final name =
+        (match?.group(1) ?? (uriName.contains('.') ? uriName : '$type-$id.bin'))
+            .replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    final target = File('${directory!.path}/account_${owner}_${type}_$id');
+    final meta = File('${target.path}.name');
     final file = File('${target.path}_$name');
     await file.writeAsBytes(response.bodyBytes, flush: true);
     await meta.writeAsString(name, flush: true);

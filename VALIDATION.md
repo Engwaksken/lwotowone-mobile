@@ -1,4 +1,4 @@
-# Build validation — 4 October 2026
+# Initial build validation — 4 October 2026
 
 | Check | Result |
 |---|---|
@@ -24,3 +24,15 @@ Flutter tests cover empty login validation, all participant module screen render
 Offline tests use mocked HTTP responses and secure storage. Native device secure storage, external resource opening, actual low-bandwidth use, release signing and hardware-specific behaviour still require device acceptance testing. The complete acceptance scenario is in the mobile README.
 
 Web screenshot files in `docs/screenshots` show a locally seeded demo, not measured impact or live deployment data.
+
+## Continued development validation
+
+Laravel enterprise update and earnings filter tests: **17 tests, 95 assertions passed**. Coverage includes update ownership, duplicate-safe replay, date boundaries, enterprise filtering, and search without changing totals.
+
+Flutter static analysis: **No issues found**. Flutter automated tests: **11 tests passed**. New tests cover earnings periods and API configuration. Native APK compilation and device acceptance testing remain pending.
+
+## Learning progress and events validation
+
+Laravel: **22 tests, 136 assertions passed**. Checks cover cancellation ownership and replay, capacity release, reuse of cancelled registrations, start-time and attendance restrictions, published-content progress, assessment-gated certificate readiness and empty-course handling.
+
+Flutter: **18 tests passed**; static analysis reports **no issues found**. Coverage includes progress calculations, event cancellation/re-registration, email-verification registration, and authorized lesson/resource file caching for offline use. Android release-mode APK compilation passed for `https://cms.kemmytech.com/api` (debug signing because no release key is configured). Installation and physical-device acceptance testing remain pending.

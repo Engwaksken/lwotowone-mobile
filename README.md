@@ -57,3 +57,36 @@ Email notices are sent by the Laravel queue; mobile sees database notices on the
 - `test/`: widget and API error-handling tests.
 
 Device acceptance: register, enrol, sync, turn off data, restart the app, read a lesson, queue a log, restore data, sync, verify the server record appears once, submit work, assess it on web, then sync feedback. Also test real resource opening, session expiry, cross-account isolation, low bandwidth and store-signed secure storage. Native Android/iOS builds and physical-device testing require your build environment and release credentials.
+
+## Continued development: enterprise editing and APK automation
+
+Enterprise cards now include Edit enterprise. Participants can update their business plan and stage online, while income entries remain attached to the same enterprise. Reporting filters work offline against the latest downloaded records: enterprise, all time, week, month, year and custom dates. Search matches transaction descriptions; totals use the reporting filters.
+
+The app rejects missing, placeholder, non-HTTPS and credential-bearing API addresses before sending login details. Always provide a real API base URL ending in `/api`.
+
+For a tested local APK build in PowerShell:
+
+```powershell
+cd D:\projects\lwotowone-mobile
+.\scripts\build-apk.ps1 -ApiBaseUrl 'https://YOUR-ACTUAL-DOMAIN/api'
+```
+
+Replace the URL. The script checks dependencies, analysis and tests before building. Add `-RequireReleaseKey` to require production signing. Copy `android/key.properties.example` to `android/key.properties`, set your real key details and keep the keystore outside source control. Gradle uses the configured upload key when present; without it, local release builds still use debug signing for testing and the script says so.
+
+After merging the workflow into the default branch, open GitHub **Actions → Flutter checks and test APK → Run workflow**. Enter your actual HTTPS API URL. The manual run builds a debug-signed test APK and uploads `lwotowone-test-apk`. Pushes and pull requests run analysis and tests without publishing an APK. This workflow does not publish to an app store.
+
+The workflow pins Flutter 3.47.6. Production APK signing and physical-device acceptance remain separate from the test artifact. Official signing reference: https://docs.flutter.dev/deployment/android
+
+## Learning progress and event update
+
+Course cards and downloaded course pages show lesson completion, practical assessments passed and certificate readiness. The next incomplete lesson opens automatically when entering a course. Progress reflects the last confirmed snapshot; queued offline completions appear after successful synchronisation. Certificate links use the configured API host and require web sign-in.
+
+Event screens display registration history, confirmation before cancellation, and re-registration after cancellation. Cancellation and registration require an online response. Start-time and capacity rules are enforced by Laravel. Synchronise after updating the web API so the app receives event eligibility fields. No dependency or native signing change is required by this update.
+
+## Account email verification update
+
+Mobile registration now handles the API's email-verification response without expecting an access token. The participant is returned to sign-in with a confirmation message and can sign in after verifying their email. Accounts provisioned by an administrator with a temporary password must first verify the email and change that temporary password on the website before mobile API sign-in is allowed. SMTP delivery and administrator-managed users/settings remain web-portal functions.
+
+## Offline learning content
+
+After payment/course access is confirmed, use **Synchronise** while connected to download authorized lesson text and downloadable lesson/resource files. They are stored per account and can be opened offline; lesson completions and written submissions can remain queued until the next successful sync. Locked content is not cached. Streaming videos and external links still require internet, and logging out removes that account's local cache.
