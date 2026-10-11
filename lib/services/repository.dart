@@ -137,7 +137,7 @@ class Repository extends ChangeNotifier {
     return value;
   }
 
-  Future<void> authenticate(
+  Future<String?> authenticate(
     Map<String, dynamic> fields, {
     bool register = false,
   }) async {
@@ -146,8 +146,17 @@ class Repository extends ChangeNotifier {
       register ? '/register' : '/login',
       fields,
     );
-    token = result['token'] as String;
-    owner = (result['user']['id']).toString();
+    if (register && result['token'] == null) {
+      return result['message']?.toString() ??
+          'Account created. Verify your email before signing in.';
+    }
+    final resultToken = result['token'];
+    final resultUser = result['user'];
+    if (resultToken is! String || resultUser is! Map || resultUser['id'] == null) {
+      throw ApiFailure('The server returned incomplete sign-in details.', 0);
+    }
+    token = resultToken;
+    owner = resultUser['id'].toString();
     await secure.write(key: 'token', value: token);
     await secure.write(key: 'owner', value: owner);
     data = await _loadMap('snapshot');
@@ -159,6 +168,7 @@ class Repository extends ChangeNotifier {
         .toList();
     notifyListeners();
     await sync();
+    return null;
   }
 
   Future<void> sync() async {

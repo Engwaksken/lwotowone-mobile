@@ -76,3 +76,13 @@ Replace the URL. The script checks dependencies, analysis and tests before build
 After merging the workflow into the default branch, open GitHub **Actions → Flutter checks and test APK → Run workflow**. Enter your actual HTTPS API URL. The manual run builds a debug-signed test APK and uploads `lwotowone-test-apk`. Pushes and pull requests run analysis and tests without publishing an APK. This workflow does not publish to an app store.
 
 The workflow pins Flutter 3.47.6. Production APK signing and physical-device acceptance remain separate from the test artifact. Official signing reference: https://docs.flutter.dev/deployment/android
+
+## Learning progress and event update
+
+Course cards and downloaded course pages show lesson completion, practical assessments passed and certificate readiness. The next incomplete lesson opens automatically when entering a course. Progress reflects the last confirmed snapshot; queued offline completions appear after successful synchronisation. Certificate links use the configured API host and require web sign-in.
+
+Event screens display registration history, confirmation before cancellation, and re-registration after cancellation. Cancellation and registration require an online response. Start-time and capacity rules are enforced by Laravel. Synchronise after updating the web API so the app receives event eligibility fields. No dependency or native signing change is required by this update.
+
+## Account email verification update
+
+Mobile registration now handles the API's email-verification response without expecting an access token. The participant is returned to sign-in with a confirmation message and can sign in after verifying their email. Accounts provisioned by an administrator with a temporary password must first verify the email and change that temporary password on the website before mobile API sign-in is allowed. SMTP delivery and administrator-managed users/settings remain web-portal functions.

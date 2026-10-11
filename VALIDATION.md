@@ -30,3 +30,9 @@ Web screenshot files in `docs/screenshots` show a locally seeded demo, not measu
 Laravel enterprise update and earnings filter tests: **17 tests, 95 assertions passed**. Coverage includes update ownership, duplicate-safe replay, date boundaries, enterprise filtering, and search without changing totals.
 
 Flutter static analysis: **No issues found**. Flutter automated tests: **11 tests passed**. New tests cover earnings periods and API configuration. Native APK compilation and device acceptance testing remain pending.
+
+## Learning progress and events validation
+
+Laravel: **22 tests, 136 assertions passed**. Checks cover cancellation ownership and replay, capacity release, reuse of cancelled registrations, start-time and attendance restrictions, published-content progress, assessment-gated certificate readiness and empty-course handling.
+
+Flutter: **17 tests passed**; static analysis reports **no issues found**. Coverage includes progress calculations, populated screen checks for certificate gating, cancellation confirmation and re-registration, plus API email-verification registration responses. Android release-mode APK compilation passed for `https://cms.kemmytech.com/api` (50.1 MB; debug signing because no release key is configured). Installation and physical-device acceptance testing remain pending.

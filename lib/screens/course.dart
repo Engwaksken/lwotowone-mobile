@@ -3,6 +3,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:open_filex/open_filex.dart';
 import '../services/repository.dart';
 import 'action_form.dart';
+import 'learning_progress.dart';
+import '../services/course_progress.dart';
+import '../services/api_config.dart';
 
 class CourseScreen extends StatelessWidget {
   final Repository repo;
@@ -12,6 +15,7 @@ class CourseScreen extends StatelessWidget {
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: repo,
     builder: (context, _) {
+      final progress = CourseProgress.fromData(repo.data, course['id']);
       final lessons =
           repo
               .rows('lessons')
@@ -26,6 +30,7 @@ class CourseScreen extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           children: [
             Text(course['summary'] ?? ''),
+            LearningProgressView(progress: progress),
             const SizedBox(height: 20),
             Text('Lessons', style: Theme.of(context).textTheme.titleLarge),
             if (lessons.isEmpty)
@@ -33,6 +38,8 @@ class CourseScreen extends StatelessWidget {
             for (final l in lessons)
               Card(
                 child: ExpansionTile(
+                  key: PageStorageKey('lesson-${l['id']}'),
+                  initiallyExpanded: l['id'] == progress.nextLessonId,
                   title: Text(l['title']),
                   leading: Icon(
                     repo
@@ -59,13 +66,25 @@ class CourseScreen extends StatelessWidget {
                               ),
                             ),
                           FilledButton(
-                            onPressed: () => run(
-                              context,
-                              () => repo.act('complete', {
-                                'lesson_id': l['id'],
-                              }, offlineAllowed: true),
+                            onPressed:
+                                repo.busy ||
+                                    repo
+                                        .rows('lesson_progress')
+                                        .any((p) => p['lesson_id'] == l['id'])
+                                ? null
+                                : () => run(
+                                    context,
+                                    () => repo.act('complete', {
+                                      'lesson_id': l['id'],
+                                    }, offlineAllowed: true),
+                                  ),
+                            child: Text(
+                              repo
+                                      .rows('lesson_progress')
+                                      .any((p) => p['lesson_id'] == l['id'])
+                                  ? 'Completed'
+                                  : 'Mark complete',
                             ),
-                            child: const Text('Mark complete'),
                           ),
                         ],
                       ),
@@ -103,12 +122,24 @@ class CourseScreen extends StatelessWidget {
               assignment(context, a),
             const SizedBox(height: 20),
             OutlinedButton(
-              onPressed: () => launchUrl(
-                Uri.parse(
-                  '${Repository.base.replaceFirst(RegExp(r'/api/?$'), '')}/certificates/${course['id']}',
-                ),
-                mode: LaunchMode.externalApplication,
-              ),
+              onPressed: !progress.certificateReady
+                  ? null
+                  : () => run(context, () async {
+                      final error = ApiConfig.validate(repo.baseUrl);
+                      if (error != null) throw ApiFailure(error, 0);
+                      final opened = await launchUrl(
+                        Uri.parse(
+                          '${repo.baseUrl.replaceFirst(RegExp(r'/api$'), '')}/certificates/${course['id']}',
+                        ),
+                        mode: LaunchMode.externalApplication,
+                      );
+                      if (!opened) {
+                        throw ApiFailure(
+                          'Could not open the certificate page.',
+                          0,
+                        );
+                      }
+                    }),
               child: const Text(
                 'Completion certificate (web sign-in required)',
               ),

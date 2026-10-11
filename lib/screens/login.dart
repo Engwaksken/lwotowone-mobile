@@ -18,7 +18,7 @@ class _LoginState extends State<Login> {
       phone = TextEditingController(),
       district = TextEditingController();
   bool register = false, busy = false, hidden = true, consent = false;
-  String? error;
+  String? error, successMessage;
   @override
   void dispose() {
     for (final c in [name, email, password, confirm, phone, district]) {
@@ -38,9 +38,11 @@ class _LoginState extends State<Login> {
     setState(() {
       busy = true;
       error = null;
+      successMessage = null;
     });
     try {
-      await widget.repo.authenticate({
+      final wasRegistering = register;
+      final response = await widget.repo.authenticate({
         'email': email.text.trim(),
         'password': password.text,
         if (register) ...{
@@ -50,7 +52,16 @@ class _LoginState extends State<Login> {
           'password_confirmation': confirm.text,
           'consent': 1,
         },
-      }, register: register);
+      }, register: wasRegistering);
+      if (wasRegistering && response != null && mounted) {
+        setState(() {
+          register = false;
+          successMessage = response;
+          password.clear();
+          confirm.clear();
+          consent = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
     } finally {
@@ -95,6 +106,19 @@ class _LoginState extends State<Login> {
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.error,
                       ),
+                    ),
+                  ),
+                if (successMessage != null)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xffe8f2ec),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      successMessage!,
+                      style: const TextStyle(color: Color(0xff175742)),
                     ),
                   ),
                 if (register) ...[
@@ -180,6 +204,7 @@ class _LoginState extends State<Login> {
                       : () => setState(() {
                           register = !register;
                           error = null;
+                          successMessage = null;
                         }),
                   child: Text(
                     register

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../services/repository.dart';
 import '../services/earnings.dart';
+import '../services/course_progress.dart';
+import 'learning_progress.dart';
 import 'action_form.dart';
 import 'course.dart';
 
@@ -281,23 +283,33 @@ class _HomeState extends State<Home> {
             return card(
               c['title'],
               '${c['level']} · ${c['duration_hours']} hours\n${c['summary']}',
-              button: FilledButton(
-                onPressed: repo.busy
-                    ? null
-                    : () => enrolled
-                          ? Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    CourseScreen(repo: repo, course: c),
-                              ),
-                            )
-                          : run(
-                              () => repo.act('enrol', {'course_id': c['id']}),
-                            ),
-                child: Text(
-                  enrolled ? 'Open downloaded lessons' : 'Enrol (online)',
-                ),
+              button: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (enrolled)
+                    LearningProgressView(
+                      progress: CourseProgress.fromData(repo.data, c['id']),
+                    ),
+                  FilledButton(
+                    onPressed: repo.busy
+                        ? null
+                        : () => enrolled
+                              ? Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        CourseScreen(repo: repo, course: c),
+                                  ),
+                                )
+                              : run(
+                                  () =>
+                                      repo.act('enrol', {'course_id': c['id']}),
+                                ),
+                    child: Text(
+                      enrolled ? 'Open downloaded lessons' : 'Enrol (online)',
+                    ),
+                  ),
+                ],
               ),
             );
           }).toList(),
@@ -597,26 +609,74 @@ class _HomeState extends State<Home> {
           const Text('Records only. No money is transferred through this app.'),
         ];
       case 'Events':
-        return emptyAware(
-          'events',
-          list('events').map((e) {
-            final registered = repo
+        return [
+          ...list('events').map((event) {
+            final registrations = repo
                 .rows('event_registrations')
-                .any((r) => r['event_id'] == e['id']);
+                .where((r) => r['event_id'] == event['id']);
+            final registration = registrations.isEmpty
+                ? null
+                : registrations.first;
             return card(
-              e['title'],
-              '${e['starts_at']} · ${e['location']}\n${e['description']}',
-              button: registered
-                  ? const Text('Registered')
-                  : FilledButton(
-                      onPressed: () => run(
-                        () => repo.act('register-event', {'event_id': e['id']}),
+              event['title'],
+              '${event['starts_at']} · ${event['location']}\n${event['description']}',
+              button: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (registration != null)
+                    Text('Registration: ${registration['status']}'),
+                  if ((registration == null ||
+                          registration['status'] == 'cancelled') &&
+                      event['registration_open'] != false)
+                    FilledButton(
+                      onPressed: repo.busy
+                          ? null
+                          : () => run(
+                              () => repo.act('register-event', {
+                                'event_id': event['id'],
+                              }),
+                            ),
+                      child: Text(
+                        registration == null
+                            ? 'Register (online)'
+                            : 'Register again (online)',
                       ),
-                      child: const Text('Register (online)'),
                     ),
+                  if (event['registration_open'] == false)
+                    const Text('Registration is closed.'),
+                  if (registration?['can_cancel'] == true)
+                    TextButton(
+                      onPressed: repo.busy
+                          ? null
+                          : () => cancelEvent(registration!),
+                      child: const Text('Cancel registration'),
+                    ),
+                ],
+              ),
             );
-          }).toList(),
-        );
+          }),
+          heading('My event history'),
+          if (repo.rows('event_registrations').isEmpty)
+            const Text('No event registrations yet.'),
+          ...repo
+              .rows('event_registrations')
+              .map(
+                (r) => card(
+                  r['event_title'] ?? 'Event #${r['event_id']}',
+                  r['status'],
+                  button:
+                      r['can_cancel'] == true &&
+                          !repo
+                              .rows('events')
+                              .any((e) => e['id'] == r['event_id'])
+                      ? TextButton(
+                          onPressed: repo.busy ? null : () => cancelEvent(r),
+                          child: const Text('Cancel registration'),
+                        )
+                      : null,
+                ),
+              ),
+        ];
       case 'Notifications':
         return emptyAware(
           'notifications',
@@ -702,6 +762,33 @@ class _HomeState extends State<Home> {
         ];
       default:
         return [];
+    }
+  }
+
+  Future<void> cancelEvent(Map<String, dynamic> registration) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel event registration?'),
+        content: const Text(
+          'Your place will become available to another learner. You can register again if there is space before the event starts.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep registration'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancel registration'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await run(
+        () => repo.act('cancel-event', {'registration_id': registration['id']}),
+      );
     }
   }
 

@@ -6,6 +6,29 @@ import 'package:http/testing.dart';
 import 'package:lwotowone_mobile/services/repository.dart';
 
 void main() {
+  test('Registration handles email-verification response without a token', () async {
+    final repo = Repository(
+      baseUrl: 'https://learning.test/api',
+      client: MockClient((request) async {
+        expect(request.url.path, '/api/register');
+        return http.Response(
+          jsonEncode({'message': 'Check your email to verify your account.'}),
+          201,
+        );
+      }),
+    );
+
+    final message = await repo.authenticate({
+      'name': 'New Learner',
+      'email': 'learner@example.test',
+      'password': 'A-long-test-password',
+    }, register: true);
+
+    expect(message, 'Check your email to verify your account.');
+    expect(repo.token, isNull);
+    repo.dispose();
+  });
+
   test(
     'API sends bearer credentials and exposes validation feedback',
     () async {
