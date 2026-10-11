@@ -270,7 +270,7 @@ class _HomeState extends State<Home> {
             style: const TextStyle(fontSize: 12),
           ),
           const Text(
-            'Downloaded lesson text is available offline. Videos use data and are not downloaded automatically.',
+            'Synchronise while connected to save authorized lessons and course files for offline use. Streaming videos and external links still need internet.',
           ),
         ];
       case 'Learn':

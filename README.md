@@ -86,3 +86,7 @@ Event screens display registration history, confirmation before cancellation, an
 ## Account email verification update
 
 Mobile registration now handles the API's email-verification response without expecting an access token. The participant is returned to sign-in with a confirmation message and can sign in after verifying their email. Accounts provisioned by an administrator with a temporary password must first verify the email and change that temporary password on the website before mobile API sign-in is allowed. SMTP delivery and administrator-managed users/settings remain web-portal functions.
+
+## Offline learning content
+
+After payment/course access is confirmed, use **Synchronise** while connected to download authorized lesson text and downloadable lesson/resource files. They are stored per account and can be opened offline; lesson completions and written submissions can remain queued until the next successful sync. Locked content is not cached. Streaming videos and external links still require internet, and logging out removes that account's local cache.

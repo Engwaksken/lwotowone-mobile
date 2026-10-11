@@ -40,7 +40,9 @@ class CourseScreen extends StatelessWidget {
                 child: ExpansionTile(
                   key: PageStorageKey('lesson-${l['id']}'),
                   initiallyExpanded: l['id'] == progress.nextLessonId,
-                  title: Text(l['title']),
+                  title: Text(
+                    l['title'] + (l['locked'] == true ? ' · Locked' : ''),
+                  ),
                   leading: Icon(
                     repo
                             .rows('lesson_progress')
@@ -54,38 +56,74 @@ class CourseScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          SelectableText(l['body'] ?? ''),
-                          if (l['video_url'] != null)
-                            TextButton(
-                              onPressed: () => launchUrl(
-                                Uri.parse(l['video_url']),
-                                mode: LaunchMode.externalApplication,
+                          if (l['locked'] == true)
+                            const Text(
+                              'Sync after course access is approved and preceding lessons are completed to unlock this lesson.',
+                            )
+                          else ...[
+                            SelectableText(l['body'] ?? ''),
+                            if (l['video_url'] != null)
+                              TextButton(
+                                onPressed: () => launchUrl(
+                                  Uri.parse(l['video_url']),
+                                  mode: LaunchMode.externalApplication,
+                                ),
+                                child: const Text(
+                                  'Watch video (uses internet data)',
+                                ),
                               ),
-                              child: const Text(
-                                'Watch video (uses internet data)',
+                            if (l['download_url'] != null &&
+                                repo.hasCachedLearningFile(
+                                  'lessons',
+                                  l['id'].toString(),
+                                ))
+                              TextButton.icon(
+                                onPressed: () => run(context, () async {
+                                  final file = await repo.cachedLearningFile(
+                                    'lessons',
+                                    l['id'].toString(),
+                                  );
+                                  if (file == null) {
+                                    throw ApiFailure(
+                                      'Sync while connected to download this lesson file.',
+                                      0,
+                                    );
+                                  }
+                                  final result = await OpenFilex.open(
+                                    file.path,
+                                  );
+                                  if (result.type != ResultType.done) {
+                                    throw ApiFailure(result.message, 0);
+                                  }
+                                }),
+                                icon: const Icon(Icons.offline_pin),
+                                label: const Text(
+                                  'Open downloaded lesson file',
+                                ),
                               ),
-                            ),
-                          FilledButton(
-                            onPressed:
-                                repo.busy ||
-                                    repo
+                            FilledButton(
+                              onPressed:
+                                  l['locked'] == true ||
+                                      repo.busy ||
+                                      repo
+                                          .rows('lesson_progress')
+                                          .any((p) => p['lesson_id'] == l['id'])
+                                  ? null
+                                  : () => run(
+                                      context,
+                                      () => repo.act('complete', {
+                                        'lesson_id': l['id'],
+                                      }, offlineAllowed: true),
+                                    ),
+                              child: Text(
+                                repo
                                         .rows('lesson_progress')
                                         .any((p) => p['lesson_id'] == l['id'])
-                                ? null
-                                : () => run(
-                                    context,
-                                    () => repo.act('complete', {
-                                      'lesson_id': l['id'],
-                                    }, offlineAllowed: true),
-                                  ),
-                            child: Text(
-                              repo
-                                      .rows('lesson_progress')
-                                      .any((p) => p['lesson_id'] == l['id'])
-                                  ? 'Completed'
-                                  : 'Mark complete',
+                                    ? 'Completed'
+                                    : 'Mark complete',
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -99,16 +137,80 @@ class CourseScreen extends StatelessWidget {
                     .rows('resources')
                     .where((r) => r['course_id'] == course['id']))
               ListTile(
-                title: Text(r['title']),
-                subtitle: Text(r['description'] ?? ''),
-                trailing: const Icon(Icons.download),
-                onTap: () => run(context, () async {
-                  final file = await repo.downloadResource(r['id']);
-                  final result = await OpenFilex.open(file.path);
-                  if (result.type != ResultType.done) {
-                    throw ApiFailure(result.message, 0);
-                  }
-                }),
+                title: Text(
+                  r['title'] + (r['locked'] == true ? ' · Locked' : ''),
+                ),
+                subtitle: Text(
+                  [
+                    if ((r['description'] ?? '').toString().isNotEmpty)
+                      r['description'].toString(),
+                    if (r['locked'] != true &&
+                        r['download_url'] != null &&
+                        repo.hasCachedLearningFile(
+                          'resources',
+                          r['id'].toString(),
+                        ))
+                      'Downloaded for offline use',
+                    if (r['locked'] != true &&
+                        r['download_url'] != null &&
+                        !repo.hasCachedLearningFile(
+                          'resources',
+                          r['id'].toString(),
+                        ))
+                      'Sync while connected to download for offline use',
+                    if (r['locked'] != true && r['content_url'] != null)
+                      'External content requires an internet connection',
+                  ].join(' · '),
+                ),
+                trailing: Icon(
+                  r['locked'] == true
+                      ? Icons.lock_outline
+                      : repo.hasCachedLearningFile(
+                          'resources',
+                          r['id'].toString(),
+                        )
+                      ? Icons.offline_pin
+                      : Icons.download,
+                ),
+                onTap: r['locked'] == true
+                    ? null
+                    : () => run(context, () async {
+                        final body = r['content_body']?.toString();
+                        if (body != null && body.isNotEmpty) {
+                          await showDialog<void>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: Text(r['title']),
+                              content: SingleChildScrollView(
+                                child: SelectableText(body),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('Close'),
+                                ),
+                              ],
+                            ),
+                          );
+                        } else if (r['content_url'] != null) {
+                          final opened = await launchUrl(
+                            Uri.parse(r['content_url']),
+                            mode: LaunchMode.externalApplication,
+                          );
+                          if (!opened) {
+                            throw ApiFailure(
+                              'Could not open the resource link.',
+                              0,
+                            );
+                          }
+                        } else if (r['download_url'] != null) {
+                          final file = await repo.downloadResource(r['id']);
+                          final result = await OpenFilex.open(file.path);
+                          if (result.type != ResultType.done) {
+                            throw ApiFailure(result.message, 0);
+                          }
+                        }
+                      }),
               ),
             const SizedBox(height: 20),
             Text(
