@@ -35,7 +35,7 @@ Before distribution, review the included green-and-gold L lettermark or replace 
 - First sign-in and enrolment need internet.
 - Synchronise from the toolbar or pull to refresh. Opening the main screen also requests a sync.
 - Course lesson text and account records persist in app-private storage. Tokens use OS secure storage.
-- Resources download only when tapped and can then reopen offline. Videos remain external links and require internet.
+- Documents and non-video lesson files synchronize for offline use. Video files are opt-in: tap **Download compressed video for offline** in a lesson to download and compress it to up to 540p. Videos over 100 MB are refused; removable downloads show their storage size. Streaming/external video links still require internet.
 - Lesson completion, written assignments, practical logs and income/expense records can be queued offline.
 - The queue persists across app restarts. UUIDs prevent server duplication after retry.
 - A validation failure remains in Pending with the server's message. Retry or discard it; to change the contents, discard the failed item and submit a corrected one.

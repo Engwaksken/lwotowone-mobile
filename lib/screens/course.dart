@@ -7,10 +7,21 @@ import 'learning_progress.dart';
 import '../services/course_progress.dart';
 import '../services/api_config.dart';
 
-class CourseScreen extends StatelessWidget {
+class CourseScreen extends StatefulWidget {
   final Repository repo;
   final Map<String, dynamic> course;
   const CourseScreen({super.key, required this.repo, required this.course});
+
+  @override
+  State<CourseScreen> createState() => _CourseScreenState();
+}
+
+class _CourseScreenState extends State<CourseScreen> {
+  Repository get repo => widget.repo;
+  Map<String, dynamic> get course => widget.course;
+  final Map<String, double> videoDownloads = {};
+  final Set<String> compressingVideos = {};
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: repo,
@@ -72,7 +83,20 @@ class CourseScreen extends StatelessWidget {
                                   'Watch video (uses internet data)',
                                 ),
                               ),
+                            if (l['media_type'] == 'video' &&
+                                l['download_url'] != null)
+                              offlineVideoAction(context, l),
+                            if (l['media_type'] == 'video' &&
+                                l['video_url'] != null &&
+                                l['download_url'] == null)
+                              const Padding(
+                                padding: EdgeInsets.only(bottom: 12),
+                                child: Text(
+                                  'This streamed video needs internet. The course has no downloadable offline video file.',
+                                ),
+                              ),
                             if (l['download_url'] != null &&
+                                l['media_type'] != 'video' &&
                                 repo.hasCachedLearningFile(
                                   'lessons',
                                   l['id'].toString(),
@@ -300,6 +324,164 @@ class CourseScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget offlineVideoAction(BuildContext context, Map<String, dynamic> lesson) {
+    final id = lesson['id'].toString();
+    final cached = repo.hasCachedLearningFile('lessons', id);
+    final progress = videoDownloads[id];
+    if (cached) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FutureBuilder<int?>(
+            future: repo.cachedLearningFileSize('lessons', id),
+            builder: (context, snapshot) {
+              final size = snapshot.data;
+              final detail = size == null
+                  ? 'Saved for offline viewing'
+                  : 'Saved offline · ${formatBytes(size)}';
+              return Text(detail, textAlign: TextAlign.center);
+            },
+          ),
+          OutlinedButton.icon(
+            onPressed: () => run(context, () async {
+              final file = await repo.cachedLearningFile('lessons', id);
+              if (file == null) {
+                throw ApiFailure(
+                  'Download the video again to watch offline.',
+                  0,
+                );
+              }
+              final result = await OpenFilex.open(file.path);
+              if (result.type != ResultType.done) {
+                throw ApiFailure(result.message, 0);
+              }
+            }),
+            icon: const Icon(Icons.play_circle_outline),
+            label: const Text('Watch offline'),
+          ),
+          TextButton.icon(
+            onPressed: () async {
+              final remove = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Remove downloaded video?'),
+                  content: const Text(
+                    'This frees the video storage on this device. You can download it again later.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Keep video'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Remove'),
+                    ),
+                  ],
+                ),
+              );
+              if (remove == true) {
+                await repo.removeCachedLearningFile('lessons', id);
+              }
+            },
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Remove download'),
+          ),
+        ],
+      );
+    }
+    if (progress != null) {
+      final compressing = compressingVideos.contains(id);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LinearProgressIndicator(
+            value: compressing || progress < 0 ? null : progress,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            compressing
+                ? 'Compressing for smaller offline storage…'
+                : progress < 0
+                ? 'Downloading video…'
+                : 'Downloading video · ${(progress * 100).round()}%',
+            textAlign: TextAlign.center,
+          ),
+        ],
+      );
+    }
+    return OutlinedButton.icon(
+      onPressed: () async {
+        final messenger = ScaffoldMessenger.of(context);
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Save video for offline use?'),
+            content: const Text(
+              'This downloads the video using mobile data if Wi-Fi is unavailable, then compresses it to up to 540p to reduce storage. Videos over 100 MB cannot be saved.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Download'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true || !mounted) return;
+        setState(() {
+          videoDownloads[id] = 0;
+          compressingVideos.remove(id);
+        });
+        try {
+          final savedFile = await repo.saveLessonVideoOffline(
+            id,
+            lesson['download_url'].toString(),
+            onDownloadProgress: (value) {
+              if (mounted) setState(() => videoDownloads[id] = value);
+            },
+            onCompressionStart: () {
+              if (mounted) setState(() => compressingVideos.add(id));
+            },
+          );
+          if (mounted) {
+            final size = await savedFile.length();
+            final wasCompressed = savedFile.path.endsWith('-offline.mp4');
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(
+                  '${wasCompressed ? 'Compressed' : 'Saved'} video for offline viewing · ${formatBytes(size)}',
+                ),
+              ),
+            );
+          }
+        } catch (error) {
+          if (mounted) {
+            messenger.showSnackBar(SnackBar(content: Text(error.toString())));
+          }
+        } finally {
+          if (mounted) {
+            setState(() {
+              videoDownloads.remove(id);
+              compressingVideos.remove(id);
+            });
+          }
+        }
+      },
+      icon: const Icon(Icons.download_for_offline_outlined),
+      label: const Text('Download compressed video for offline'),
+    );
+  }
+
+  String formatBytes(int bytes) {
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   Future<void> run(BuildContext context, Future<void> Function() work) async {

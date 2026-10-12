@@ -133,4 +133,45 @@ void main() {
     );
     repo.dispose();
   });
+
+  test(
+    'Synchronisation does not download large videos automatically',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'lwotowone-video-sync-',
+      );
+      final paths = <String>[];
+      final repo = Repository(
+        baseUrl: 'https://learning.test/api',
+        client: MockClient((request) async {
+          paths.add(request.url.path);
+          return http.Response(
+            jsonEncode({
+              'lessons': [
+                {
+                  'id': 17,
+                  'locked': false,
+                  'media_type': 'video',
+                  'download_url':
+                      'https://learning.test/api/lessons/17/download',
+                },
+              ],
+              'resources': [],
+            }),
+            200,
+          );
+        }),
+      );
+      await repo.init(storageDirectory: directory);
+      repo.token = 'video-token';
+      repo.owner = 'learner-1';
+
+      await repo.sync();
+
+      expect(paths, ['/api/snapshot']);
+      expect(repo.hasCachedLearningFile('lessons', '17'), isFalse);
+      repo.dispose();
+      await directory.delete(recursive: true);
+    },
+  );
 }

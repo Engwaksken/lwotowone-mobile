@@ -61,6 +61,14 @@ class _HomeState extends State<Home> {
     }
   }
 
+  void selectSection(String value) {
+    setState(() {
+      section = value;
+      search = '';
+    });
+    Navigator.pop(context);
+  }
+
   void form(
     String title,
     String action,
@@ -109,42 +117,46 @@ class _HomeState extends State<Home> {
         ],
       ),
       drawer: Drawer(
+        width: (MediaQuery.sizeOf(context).width * .86)
+            .clamp(280, 360)
+            .toDouble(),
         child: SafeArea(
-          child: ListView(
+          child: Column(
             children: [
-              const DrawerHeader(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              drawerHeader(),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                   children: [
-                    Icon(Icons.eco, size: 42),
-                    Text(
-                      'LWOTOWONE',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text('Learn → Practice → Create → Earn'),
+                    drawerItem('Overview'),
+                    drawerGroup('LEARN & GROW', [
+                      'Learn',
+                      'Practice',
+                      'Mentorship',
+                      'Opportunities',
+                    ]),
+                    drawerGroup('BUSINESS & COMMUNITY', [
+                      'Enterprise',
+                      'Events',
+                      'Notifications',
+                    ]),
+                    drawerGroup('ACCOUNT', ['Pending', 'Profile']),
                   ],
                 ),
               ),
-              for (final e in sections.entries)
-                ListTile(
-                  selected: section == e.key,
-                  leading: Icon(e.value),
-                  title: Text(
-                    e.key == 'Pending'
-                        ? 'Pending (${repo.pending.length})'
-                        : e.key,
-                  ),
-                  onTap: () {
-                    setState(() {
-                      section = e.key;
-                      search = '';
-                    });
-                    Navigator.pop(context);
-                  },
+              const Divider(height: 1),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 22,
+                  vertical: 4,
                 ),
+                leading: const Icon(Icons.logout),
+                title: const Text('Sign out'),
+                onTap: () {
+                  Navigator.pop(context);
+                  signOut();
+                },
+              ),
             ],
           ),
         ),
@@ -193,79 +205,297 @@ class _HomeState extends State<Home> {
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
-                children: content(),
+                children: [
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 960),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: content(),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex:
-            ['Overview', 'Learn', 'Mentorship', 'Enterprise'].contains(section)
-            ? ['Overview', 'Learn', 'Mentorship', 'Enterprise'].indexOf(section)
-            : 0,
-        onDestinationSelected: (i) => setState(() {
-          section = ['Overview', 'Learn', 'Mentorship', 'Enterprise'][i];
-          search = '';
-        }),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.dashboard), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.school), label: 'Learn'),
-          NavigationDestination(icon: Icon(Icons.groups), label: 'Mentor'),
-          NavigationDestination(icon: Icon(Icons.store), label: 'Earn'),
-        ],
-      ),
+      bottomNavigationBar:
+          ['Overview', 'Learn', 'Mentorship', 'Enterprise'].contains(section)
+          ? NavigationBar(
+              selectedIndex: [
+                'Overview',
+                'Learn',
+                'Mentorship',
+                'Enterprise',
+              ].indexOf(section),
+              onDestinationSelected: (i) => setState(() {
+                section = ['Overview', 'Learn', 'Mentorship', 'Enterprise'][i];
+                search = '';
+              }),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.dashboard),
+                  label: 'Home',
+                ),
+                NavigationDestination(icon: Icon(Icons.school), label: 'Learn'),
+                NavigationDestination(
+                  icon: Icon(Icons.groups),
+                  label: 'Mentor',
+                ),
+                NavigationDestination(icon: Icon(Icons.store), label: 'Earn'),
+              ],
+            )
+          : null,
     ),
   );
+
+  Widget drawerHeader() {
+    final user = repo.data['user'] as Map? ?? {};
+    final name = (user['name'] ?? 'Participant').toString();
+    final email = (user['email'] ?? '').toString();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xff174f3d), Color(0xff0e382c)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 21,
+                backgroundColor: const Color(0xffe5c16a),
+                foregroundColor: const Color(0xff163c30),
+                child: Text(
+                  name.isEmpty ? 'L' : name.characters.first.toUpperCase(),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(width: 11),
+              const Expanded(
+                child: Text(
+                  'LWOTOWONE',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.3,
+                  ),
+                ),
+              ),
+              const Icon(Icons.eco, color: Color(0xffe5c16a)),
+            ],
+          ),
+          const SizedBox(height: 11),
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (email.isNotEmpty)
+            Text(
+              email,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Color(0xffd7e6dd), fontSize: 13),
+            ),
+          const SizedBox(height: 9),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .14),
+              borderRadius: BorderRadius.circular(30),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    repo.online ? Icons.cloud_done : Icons.cloud_off,
+                    size: 15,
+                    color: const Color(0xffe5c16a),
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    repo.online ? 'Online and synced' : 'Offline-ready',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget drawerGroup(String title, List<String> items) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+        child: Text(
+          title,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.05,
+          ),
+        ),
+      ),
+      for (final item in items) drawerItem(item),
+    ],
+  );
+
+  Widget drawerItem(String item) => Padding(
+    padding: EdgeInsets.zero,
+    child: ListTile(
+      dense: true,
+      visualDensity: const VisualDensity(vertical: -1),
+      minLeadingWidth: 32,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+      selected: section == item,
+      selectedTileColor: const Color(0xffe7f0e9),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      leading: Icon(sections[item]),
+      title: Text(
+        item == 'Pending' ? 'Pending (${repo.pending.length})' : item,
+        style: TextStyle(
+          fontWeight: section == item ? FontWeight.w700 : FontWeight.w500,
+        ),
+      ),
+      trailing: item == 'Pending' && repo.pending.isNotEmpty
+          ? Badge(label: Text('${repo.pending.length}'))
+          : null,
+      onTap: () => selectSection(item),
+    ),
+  );
+
   List<Widget> content() {
     switch (section) {
       case 'Overview':
         return [
-          Text(
-            'Hello, ${repo.data['user']?['name'] ?? 'learner'}',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              color: const Color(0xff163c30),
-              fontWeight: FontWeight.w700,
+          Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: const LinearGradient(
+                colors: [Color(0xffe8f1e9), Color(0xfff6f3e8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'PARTICIPANT DASHBOARD',
+                        style: TextStyle(
+                          color: Color(0xff175742),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.3,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Welcome, ${repo.data['user']?['name'] ?? 'learner'}',
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(
+                              color: const Color(0xff163c30),
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Learn, build practical skills, and grow your enterprise.',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const CircleAvatar(
+                  radius: 28,
+                  backgroundColor: Color(0xff175742),
+                  child: Icon(Icons.eco, color: Color(0xffe5c16a), size: 27),
+                ),
+              ],
             ),
           ),
-          const Text(
-            'Skills for Life. Enterprise for Livelihoods. Opportunities for Youth.',
-          ),
-          const SizedBox(height: 20),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              stat('Courses', repo.rows('enrolments').length.toString()),
-              stat(
-                'Lessons completed',
-                repo.rows('lesson_progress').length.toString(),
-              ),
-              stat(
-                'Enterprise ideas',
-                repo.rows('enterprises').length.toString(),
-              ),
-              stat('Pending sync', repo.pending.length.toString()),
-            ],
+          const SizedBox(height: 18),
+          LayoutBuilder(
+            builder: (context, constraints) => GridView.count(
+              crossAxisCount: constraints.maxWidth > 620 ? 4 : 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: constraints.maxWidth > 620 ? 1.75 : 1.5,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                dashboardStat(
+                  'Courses',
+                  repo.rows('enrolments').length.toString(),
+                  Icons.menu_book_outlined,
+                ),
+                dashboardStat(
+                  'Lessons done',
+                  repo.rows('lesson_progress').length.toString(),
+                  Icons.task_alt,
+                ),
+                dashboardStat(
+                  'My enterprises',
+                  repo.rows('enterprises').length.toString(),
+                  Icons.storefront_outlined,
+                ),
+                dashboardStat(
+                  'Pending sync',
+                  repo.pending.length.toString(),
+                  Icons.sync_problem,
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 24),
           heading('Your next step'),
-          for (final key in [
-            'Learn',
-            'Practice',
-            'Mentorship',
-            'Opportunities',
-            'Enterprise',
-          ])
-            Card(
-              child: ListTile(
-                leading: Icon(sections[key]),
-                title: Text(key),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => setState(() => section = key),
-              ),
+          LayoutBuilder(
+            builder: (context, constraints) => GridView.count(
+              crossAxisCount: constraints.maxWidth > 620 ? 3 : 2,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+              childAspectRatio: constraints.maxWidth > 620 ? 2.1 : 1.7,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                for (final key in [
+                  'Learn',
+                  'Practice',
+                  'Mentorship',
+                  'Opportunities',
+                  'Enterprise',
+                  'Events',
+                ])
+                  quickAction(key),
+              ],
             ),
+          ),
           heading('Announcements'),
+          if (repo.rows('announcements').isEmpty)
+            const Text('No new announcements right now.'),
           ...repo.rows('announcements').map((r) => card(r['title'], r['body'])),
           const SizedBox(height: 20),
           Text(
@@ -273,7 +503,7 @@ class _HomeState extends State<Home> {
             style: const TextStyle(fontSize: 12),
           ),
           const Text(
-            'Synchronise while connected to save authorized lessons and course files for offline use. Streaming videos and external links still need internet.',
+            'Synchronise to save authorized lessons and files. Save downloadable videos individually from a lesson to compress and watch offline. Streaming links still need internet.',
           ),
         ];
       case 'Learn':
@@ -817,6 +1047,69 @@ class _HomeState extends State<Home> {
     padding: const EdgeInsets.only(top: 22, bottom: 12),
     child: Text(title, style: Theme.of(context).textTheme.titleLarge),
   );
+  Widget dashboardStat(String title, String value, IconData icon) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(15),
+      border: Border.all(color: const Color(0xffdce5df)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Icon(icon, color: const Color(0xff175742), size: 20),
+        Text(
+          value,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            color: const Color(0xff163c30),
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+      ],
+    ),
+  );
+
+  Widget quickAction(String title) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => setState(() {
+        section = title;
+        search = '';
+      }),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xffdce5df)),
+        ),
+        child: Row(
+          children: [
+            Icon(sections[title], color: const Color(0xff175742), size: 20),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const Icon(Icons.chevron_right, size: 18),
+          ],
+        ),
+      ),
+    ),
+  );
+
   Widget stat(String title, String value) => Container(
     width: 150,
     padding: const EdgeInsets.all(16),

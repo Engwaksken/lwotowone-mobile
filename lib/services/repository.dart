@@ -9,6 +9,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:video_compress/video_compress.dart';
 
 class ApiFailure implements Exception {
   final String message;
@@ -208,6 +209,9 @@ class Repository extends ChangeNotifier {
         for (final item in rows(type)) {
           final url = item['download_url']?.toString();
           if (item['locked'] == true || url == null || url.isEmpty) continue;
+          // Video downloads are large and should only happen when the learner
+          // explicitly saves one for offline use.
+          if (item['media_type'] == 'video') continue;
           try {
             await _cacheLearningFile(type, item['id'].toString(), url);
           } catch (_) {
@@ -305,6 +309,141 @@ class Repository extends ChangeNotifier {
     return File('${target.path}_${await meta.readAsString()}');
   }
 
+  Future<int?> cachedLearningFileSize(String type, String id) async {
+    final file = await cachedLearningFile(type, id);
+    return file?.length();
+  }
+
+  Future<void> removeCachedLearningFile(String type, String id) async {
+    if (directory == null || owner == null) return;
+    final target = File('${directory!.path}/account_${owner}_${type}_$id');
+    final meta = File('${target.path}.name');
+    if (await meta.exists()) {
+      final name = await meta.readAsString();
+      final content = File('${target.path}_$name');
+      if (await content.exists()) await content.delete();
+      await meta.delete();
+    }
+    notifyListeners();
+  }
+
+  Future<File> saveLessonVideoOffline(
+    String id,
+    String url, {
+    void Function(double progress)? onDownloadProgress,
+    VoidCallback? onCompressionStart,
+  }) async {
+    if (directory == null || owner == null) {
+      throw ApiFailure('Sign in before saving videos for offline use.', 0);
+    }
+    final cached = await cachedLearningFile('lessons', id);
+    if (cached != null) return cached;
+    final problem = ApiConfig.validate(baseUrl);
+    if (problem != null) throw ApiFailure(problem, 0);
+    final uri = _validatedLearningUri(url);
+    final request = http.Request('GET', uri)
+      ..headers.addAll({
+        'Accept': 'application/octet-stream',
+        'Authorization': 'Bearer $token',
+      });
+    final response = await client
+        .send(request)
+        .timeout(const Duration(seconds: 45));
+    if (response.statusCode != 200) {
+      throw ApiFailure(
+        'Video download failed. Check course access and connection.',
+        response.statusCode,
+      );
+    }
+    const maxVideoBytes = 100 * 1024 * 1024;
+    if (response.contentLength != null &&
+        response.contentLength! > maxVideoBytes) {
+      throw ApiFailure(
+        'This video is larger than the 100 MB download limit.',
+        0,
+      );
+    }
+    final disposition = response.headers['content-disposition'] ?? '';
+    final match = RegExp(r'filename="?([^";]+)').firstMatch(disposition);
+    final rawName = match?.group(1) ?? uri.pathSegments.last;
+    final extension =
+        RegExp(
+          r'\.(mp4|webm|ogg)$',
+          caseSensitive: false,
+        ).firstMatch(rawName)?.group(1)?.toLowerCase() ??
+        'mp4';
+    final source = File(
+      '${directory!.path}/account_${owner}_lesson_video_$id.$extension',
+    );
+    if (response.contentLength == null) onDownloadProgress?.call(-1);
+    final sink = source.openWrite();
+    var received = 0;
+    try {
+      await for (final chunk in response.stream) {
+        received += chunk.length;
+        if (received > maxVideoBytes) {
+          throw ApiFailure(
+            'This video is larger than the 100 MB download limit.',
+            0,
+          );
+        }
+        sink.add(chunk);
+        final length = response.contentLength;
+        if (length != null && length > 0) {
+          onDownloadProgress?.call((received / length).clamp(0, 1).toDouble());
+        }
+      }
+      await sink.flush();
+    } catch (_) {
+      await sink.close();
+      if (await source.exists()) await source.delete();
+      rethrow;
+    }
+    await sink.close();
+    if (received == 0) {
+      await source.delete();
+      throw ApiFailure('The video file was empty.', 0);
+    }
+
+    onCompressionStart?.call();
+    File chosen = source;
+    try {
+      final compressed = await VideoCompress.compressVideo(
+        source.path,
+        quality: VideoQuality.Res960x540Quality,
+        deleteOrigin: false,
+      );
+      final output = compressed?.file;
+      if (output != null &&
+          await output.exists() &&
+          await output.length() < await source.length()) {
+        chosen = output;
+      }
+    } catch (_) {
+      // Preserve access to the original if a device codec cannot transcode it.
+    }
+
+    final filename = chosen == source
+        ? 'lesson-$id.$extension'
+        : 'lesson-$id-offline.mp4';
+    final target = File('${directory!.path}/account_${owner}_lessons_$id');
+    final meta = File('${target.path}.name');
+    final saved = File('${target.path}_$filename');
+    try {
+      await chosen.copy(saved.path);
+      await meta.writeAsString(filename, flush: true);
+      onDownloadProgress?.call(1);
+      notifyListeners();
+      return saved;
+    } catch (_) {
+      if (await saved.exists()) await saved.delete();
+      rethrow;
+    } finally {
+      if (await source.exists()) await source.delete();
+      if (chosen != source && await chosen.exists()) await chosen.delete();
+    }
+  }
+
   bool hasCachedLearningFile(String type, String id) {
     if (directory == null || owner == null) return false;
     final target = File('${directory!.path}/account_${owner}_${type}_$id');
@@ -318,15 +457,7 @@ class Repository extends ChangeNotifier {
     if (problem != null) throw ApiFailure(problem, 0);
     final cached = await cachedLearningFile(type, id);
     if (cached != null) return cached;
-    final uri = Uri.tryParse(url);
-    final baseUri = Uri.parse(baseUrl);
-    if (uri == null ||
-        uri.scheme != 'https' ||
-        uri.origin != baseUri.origin ||
-        uri.userInfo.isNotEmpty ||
-        !uri.path.startsWith('/api/')) {
-      throw ApiFailure('The learning file address is invalid.', 0);
-    }
+    final uri = _validatedLearningUri(url);
     final response = await client
         .get(
           uri,
@@ -354,6 +485,19 @@ class Repository extends ChangeNotifier {
     await file.writeAsBytes(response.bodyBytes, flush: true);
     await meta.writeAsString(name, flush: true);
     return file;
+  }
+
+  Uri _validatedLearningUri(String url) {
+    final uri = Uri.tryParse(url);
+    final baseUri = Uri.parse(baseUrl);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.origin != baseUri.origin ||
+        uri.userInfo.isNotEmpty ||
+        !uri.path.startsWith('/api/')) {
+      throw ApiFailure('The learning file address is invalid.', 0);
+    }
+    return uri;
   }
 
   Future<void> logout({bool discardPending = false}) async {
