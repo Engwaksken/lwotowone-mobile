@@ -219,7 +219,7 @@ class _LoginState extends State<Login> {
                 ),
                 if (!register)
                   TextButton(
-                    onPressed: () => openPage('/forgot-password'),
+                    onPressed: openForgotPassword,
                     child: const Text('Forgot password?'),
                   ),
                 const SizedBox(height: 12),
@@ -275,6 +275,27 @@ class _LoginState extends State<Login> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Could not open the website. Please try again.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> openForgotPassword() async {
+    var opened = false;
+    try {
+      opened = await launchUrl(
+        Uri.https('cms.kemmytech.com', '/forgot-password'),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      // Show a useful fallback if the device cannot open the reset page.
+    }
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not open the password reset page. Please try again.',
+          ),
         ),
       );
     }
