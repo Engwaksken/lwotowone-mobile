@@ -5,6 +5,10 @@ import 'package:http/testing.dart';
 import 'package:http/http.dart' as http;
 
 void main() {
+  test('official API address is the default app connection', () {
+    expect(ApiConfig.base, 'https://cms.kemmytech.com/api');
+    expect(ApiConfig.validate(ApiConfig.base), isNull);
+  });
   test(
     'API build configuration rejects placeholders and credential-bearing addresses',
     () {

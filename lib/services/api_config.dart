@@ -1,7 +1,7 @@
 class ApiConfig {
   static const base = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://example.com/api',
+    defaultValue: 'https://cms.kemmytech.com/api',
   );
   static String? validate(String value) {
     final uri = Uri.tryParse(value);

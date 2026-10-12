@@ -223,7 +223,10 @@ class _HomeState extends State<Home> {
         return [
           Text(
             'Hello, ${repo.data['user']?['name'] ?? 'learner'}',
-            style: Theme.of(context).textTheme.headlineMedium,
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              color: const Color(0xff163c30),
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const Text(
             'Skills for Life. Enterprise for Livelihoods. Opportunities for Youth.',

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/api_config.dart';
 import '../services/repository.dart';
 
 class Login extends StatefulWidget {
@@ -86,7 +87,11 @@ class _LoginState extends State<Login> {
                 Text(
                   'LWOTOWONE',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineMedium,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: const Color(0xff163c30),
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
                 ),
                 const Text(
                   'Learn to Earn. Earn to Grow.',
@@ -240,9 +245,38 @@ class _LoginState extends State<Login> {
             : null,
       );
   Future<void> openPage(String path) async {
-    final uri = Uri.parse(
-      Repository.base.replaceFirst(RegExp(r'/api/?$'), '') + path,
-    );
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final configProblem = ApiConfig.validate(widget.repo.baseUrl);
+    if (configProblem != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'The app is not connected to the website yet. Configure its API address and try again.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    var opened = false;
+    try {
+      final apiUri = Uri.parse(widget.repo.baseUrl);
+      final webPath = apiUri.path.replaceFirst(RegExp(r'/api/?$'), '');
+      final uri = apiUri.replace(
+        path: '$webPath$path',
+        query: null,
+        fragment: null,
+      );
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // Surface a friendly fallback instead of silently dropping the tap.
+    }
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open the website. Please try again.'),
+        ),
+      );
+    }
   }
 }
