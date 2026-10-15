@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../services/api_config.dart';
 import '../services/repository.dart';
+import 'policy_reader.dart';
 
 class Login extends StatefulWidget {
   final Repository repo;
@@ -20,6 +20,33 @@ class _LoginState extends State<Login> {
       district = TextEditingController();
   bool register = false, busy = false, hidden = true, consent = false;
   String? error, successMessage;
+  final read = {'terms': false, 'privacy': false};
+  Map<String, Map<String, String>>? policyDocs;
+
+  String? get nextUnread =>
+      read.entries.where((e) => !e.value).map((e) => e.key).firstOrNull;
+
+  /// Opens a policy; after accepting one, the next unread one opens so the
+  /// learner reads both before agreeing.
+  Future<void> readPolicy(String key) async {
+    policyDocs ??= await widget.repo.policies();
+    if (!mounted) return;
+    final doc = policyDocs![key]!;
+    final accepted = await showPolicyReader(
+      context,
+      title: doc['title']!,
+      body: doc['body']!,
+    );
+    if (!mounted || !accepted) return;
+    setState(() => read[key] = true);
+    final next = nextUnread;
+    if (next != null) {
+      await readPolicy(next);
+    } else {
+      setState(() => consent = true);
+    }
+  }
+
   @override
   void dispose() {
     for (final c in [name, email, password, confirm, phone, district]) {
@@ -30,9 +57,21 @@ class _LoginState extends State<Login> {
 
   Future<void> submit() async {
     if (!form.currentState!.validate()) return;
+    if (register && nextUnread != null) {
+      await readPolicy(nextUnread!);
+      if (nextUnread != null) {
+        if (mounted) {
+          setState(
+            () => error =
+                'Please read the terms of use and privacy notice to continue.',
+          );
+        }
+        return;
+      }
+    }
     if (register && !consent) {
       setState(
-        () => error = 'Please read and accept the terms and privacy notice.',
+        () => error = 'Please agree to the terms of use and privacy notice.',
       );
       return;
     }
@@ -52,6 +91,8 @@ class _LoginState extends State<Login> {
           'district': district.text.trim(),
           'password_confirmation': confirm.text,
           'consent': 1,
+          'terms_read': 1,
+          'privacy_read': 1,
         },
       }, register: wasRegistering);
       if (wasRegistering && response != null && mounted) {
@@ -61,6 +102,7 @@ class _LoginState extends State<Login> {
           password.clear();
           confirm.clear();
           consent = false;
+          read.updateAll((_, _) => false);
         });
       }
     } catch (e) {
@@ -173,25 +215,42 @@ class _LoginState extends State<Login> {
                   field(phone, 'Phone (optional)', required: false),
                   const SizedBox(height: 14),
                   field(district, 'District (optional)', required: false),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Before you create your account, read both documents to the end.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  for (final key in read.keys)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        read[key]!
+                            ? Icons.check_circle
+                            : Icons.description_outlined,
+                        color: read[key]! ? const Color(0xff175742) : null,
+                      ),
+                      title: Text(
+                        key == 'terms' ? 'Terms of use' : 'Privacy notice',
+                      ),
+                      subtitle: Text(read[key]! ? 'Read' : 'Not read yet'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: busy ? null : () => readPolicy(key),
+                    ),
                   CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
                     value: consent,
-                    onChanged: (v) => setState(() => consent = v ?? false),
+                    onChanged: (v) {
+                      if (v == true && nextUnread != null) {
+                        readPolicy(nextUnread!);
+                        return;
+                      }
+                      setState(() => consent = v ?? false);
+                    },
                     title: const Text(
-                      'I agree to the terms and have read the privacy notice.',
+                      'I have read and agree to the terms of use and the privacy notice.',
                     ),
                   ),
-                  Wrap(
-                    children: [
-                      TextButton(
-                        onPressed: () => openPage('/pages/terms'),
-                        child: const Text('Read terms'),
-                      ),
-                      TextButton(
-                        onPressed: () => openPage('/pages/privacy'),
-                        child: const Text('Privacy notice'),
-                      ),
-                    ],
-                  ),
+                  const SizedBox(height: 8),
                 ],
                 FilledButton(
                   onPressed: busy ? null : submit,
@@ -244,42 +303,6 @@ class _LoginState extends State<Login> {
                   : null
             : null,
       );
-  Future<void> openPage(String path) async {
-    final configProblem = ApiConfig.validate(widget.repo.baseUrl);
-    if (configProblem != null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'The app is not connected to the website yet. Configure its API address and try again.',
-            ),
-          ),
-        );
-      }
-      return;
-    }
-    var opened = false;
-    try {
-      final apiUri = Uri.parse(widget.repo.baseUrl);
-      final webPath = apiUri.path.replaceFirst(RegExp(r'/api/?$'), '');
-      final uri = apiUri.replace(
-        path: '$webPath$path',
-        query: null,
-        fragment: null,
-      );
-      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      // Surface a friendly fallback instead of silently dropping the tap.
-    }
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open the website. Please try again.'),
-        ),
-      );
-    }
-  }
-
   Future<void> openForgotPassword() async {
     var opened = false;
     try {

@@ -174,6 +174,45 @@ class Repository extends ChangeNotifier {
     return null;
   }
 
+  static const defaultPolicies = {
+    'terms': {
+      'title': 'Terms of use',
+      'body':
+          'By creating an account you agree to use Lwotowone services lawfully and respectfully, to give accurate information about yourself, and to keep your password private.\n\nCourse materials are provided for your personal learning. Do not copy, resell or share them without permission.\n\nWe may suspend accounts that misuse the platform, harass other people or try to access information that is not theirs.\n\nContact us if you have questions about these terms.',
+    },
+    'privacy': {
+      'title': 'Privacy notice',
+      'body':
+          'We collect the details you give us, such as your name, email, phone number and learner profile, to run your training, track progress and connect you with mentors and opportunities.\n\nYour information is shared only with Lwotowone staff, instructors, mentors and partners who support your learning, or when the law requires it.\n\nWe keep your data secure and only for as long as needed for these purposes.\n\nYou can ask to see, correct or delete your information by contacting us.',
+    },
+  };
+
+  /// Terms of use and privacy notice from the website, falling back to the
+  /// built-in text when offline so signup can still show both documents.
+  Future<Map<String, Map<String, String>>> policies() async {
+    try {
+      final result = await request('GET', '/policies');
+      final docs = result['policies'];
+      if (docs is Map) {
+        return {
+          for (final key in defaultPolicies.keys)
+            key: {
+              'title': (docs[key]?['title'] ?? defaultPolicies[key]!['title'])
+                  .toString(),
+              'body': (docs[key]?['body'] ?? defaultPolicies[key]!['body'])
+                  .toString(),
+            },
+        };
+      }
+    } catch (_) {
+      // Fall through to the built-in copy.
+    }
+    return {
+      for (final entry in defaultPolicies.entries)
+        entry.key: Map<String, String>.from(entry.value),
+    };
+  }
+
   Future<void> sync() async {
     if (busy || token == null) return;
     busy = true;

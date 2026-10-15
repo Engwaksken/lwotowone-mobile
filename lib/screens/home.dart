@@ -6,6 +6,7 @@ import '../services/course_progress.dart';
 import 'learning_progress.dart';
 import 'action_form.dart';
 import 'course.dart';
+import 'learner_profile.dart';
 
 class Home extends StatefulWidget {
   final Repository repo;
@@ -39,6 +40,54 @@ class _HomeState extends State<Home> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       repo.sync();
     });
+  }
+
+  static const profileGated = {
+    'Learn',
+    'Practice',
+    'Mentorship',
+    'Opportunities',
+    'Enterprise',
+    'Events',
+  };
+  Map get access => repo.data['access'] as Map? ?? const {};
+  // Older cached snapshots have no profile flag; only lock when the server says so.
+  bool get profileLocked =>
+      (repo.data['user'] as Map?)?['profile_complete'] == false;
+  int get profilePercent =>
+      (access['profile_percent'] as num?)?.toInt() ?? (profileLocked ? 0 : 100);
+  List<String> get profileMissing => [
+    for (final item in access['profile_missing'] as List? ?? const [])
+      item.toString(),
+  ];
+  void openLearnerProfile() => Navigator.push(
+    context,
+    MaterialPageRoute(builder: (_) => LearnerProfile(repo: repo)),
+  );
+  Widget profileProgress() => ProfileProgressCard(
+    percent: profilePercent,
+    missing: profileMissing,
+    onComplete: openLearnerProfile,
+  );
+  Widget? freeAccessBanner() {
+    if (access['free_access'] != true) return null;
+    final ends = DateTime.tryParse('${access['free_access_ends_at'] ?? ''}');
+    final until = ends == null
+        ? 'for now. No payment is needed.'
+        : 'until ${ends.toLocal().toString().substring(0, 16)}. After that, you can subscribe or pay to keep learning.';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xffe8f2ec),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xffbcd8c6)),
+      ),
+      child: Text(
+        'Free access: all courses, learning materials and events are free $until',
+        style: const TextStyle(color: Color(0xff175742)),
+      ),
+    );
   }
 
   List<Map<String, dynamic>> list(String key) => repo
@@ -378,15 +427,26 @@ class _HomeState extends State<Home> {
       ),
       trailing: item == 'Pending' && repo.pending.isNotEmpty
           ? Badge(label: Text('${repo.pending.length}'))
+          : profileLocked && profileGated.contains(item)
+          ? const Icon(Icons.lock_outline, size: 16, semanticLabel: 'Locked')
           : null,
       onTap: () => selectSection(item),
     ),
   );
 
   List<Widget> content() {
+    if (profileLocked && profileGated.contains(section)) {
+      return [
+        profileProgress(),
+        const Text('This section opens once your learner profile is complete.'),
+      ];
+    }
+    final banner = freeAccessBanner();
     switch (section) {
       case 'Overview':
         return [
+          if (profileLocked) profileProgress(),
+          ?banner,
           Container(
             padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
@@ -850,9 +910,17 @@ class _HomeState extends State<Home> {
             final registration = registrations.isEmpty
                 ? null
                 : registrations.first;
+            final amount =
+                num.tryParse('${event['payment_amount'] ?? ''}') ?? 0;
+            final fee = amount <= 0
+                ? 'Free'
+                : event['fee_due'] == true
+                ? 'Fee: ${amount.toStringAsFixed(2)} ${event['currency'] ?? ''}'
+                      .trim()
+                : 'Free during the free access period';
             return card(
               event['title'],
-              '${event['starts_at']} · ${event['location']}\n${event['description']}',
+              '${event['starts_at']} · ${event['location']}\n$fee\n${event['description']}',
               button: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -965,6 +1033,22 @@ class _HomeState extends State<Home> {
       case 'Profile':
         final u = repo.data['user'] as Map? ?? {};
         return [
+          if (u.containsKey('profile_complete')) ...[
+            ProfileProgressCard(
+              percent: profilePercent,
+              missing: profileMissing,
+            ),
+            FilledButton.icon(
+              onPressed: openLearnerProfile,
+              icon: const Icon(Icons.assignment_ind),
+              label: Text(
+                profileLocked
+                    ? 'Complete learner profile'
+                    : 'Update learner profile',
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           card(
             u['name'] ?? 'Participant',
             '${u['email'] ?? ''}\n${u['phone'] ?? ''}\n${u['district'] ?? ''}',
