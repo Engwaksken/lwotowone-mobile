@@ -98,10 +98,21 @@ class _LearnerProfileState extends State<LearnerProfile> {
     'Multiple',
     'Other',
   ];
+  static const educationLevels = [
+    'No formal education',
+    'Primary',
+    'O-Level',
+    'A-Level',
+    'Certificate',
+    'Diploma',
+    "Bachelor's degree",
+    'Postgraduate',
+    'Other',
+  ];
   final form = GlobalKey<FormState>();
   late final Map<String, dynamic> user;
   late final TextEditingController name, phone, location, age, employer, goal;
-  String? course, gender, urbanRural, settlement, impairment;
+  String? course, gender, urbanRural, settlement, impairment, education;
   bool? refugee, pwd, employed;
   bool busy = false;
   String? error;
@@ -128,6 +139,9 @@ class _LearnerProfileState extends State<LearnerProfile> {
         : null;
     impairment = impairments.contains(user['impairment'])
         ? user['impairment']
+        : null;
+    education = educationLevels.contains(user['education_level'])
+        ? user['education_level']
         : null;
     // Refugee and disability default to "no" on the server, so only trust
     // them once the profile has been saved.
@@ -166,6 +180,7 @@ class _LearnerProfileState extends State<LearnerProfile> {
       urbanRural != null,
       refugee != null && (refugee == false || settlement != null),
       pwd != null && (pwd == false || impairment != null),
+      education != null,
       employed != null &&
           (employed == false || employer.text.trim().isNotEmpty),
     ];
@@ -194,6 +209,7 @@ class _LearnerProfileState extends State<LearnerProfile> {
         if (refugee!) 'settlement_id': int.parse(settlement!),
         'pwd': pwd! ? '1' : '0',
         if (pwd!) 'impairment': impairment,
+        'education_level': education,
         'employed': employed! ? '1' : '0',
         if (employed!) 'employer_name': employer.text.trim(),
         'transformation_objective': goal.text.trim(),
@@ -343,6 +359,9 @@ class _LearnerProfileState extends State<LearnerProfile> {
               choice<String>('Impairment type', impairment, {
                 for (final i in impairments) i: i,
               }, (v) => impairment = v),
+            choice<String>('Education level', education, {
+              for (final level in educationLevels) level: level,
+            }, (v) => education = v),
             heading('Employment and goals'),
             choice<bool>(
               'Are you currently employed?',

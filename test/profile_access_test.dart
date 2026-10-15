@@ -13,6 +13,14 @@ Future<void> openSection(WidgetTester tester, String section) async {
     of: find.byType(Drawer),
     matching: find.text(section),
   );
+  await tester.scrollUntilVisible(
+    link,
+    120,
+    scrollable: find.descendant(
+      of: find.byType(Drawer),
+      matching: find.byType(Scrollable),
+    ),
+  );
   await Scrollable.ensureVisible(tester.element(link), alignment: 0.5);
   await tester.pumpAndSettle();
   await tester.tap(link);
@@ -138,7 +146,7 @@ void main() {
     await tester.tap(find.text('Complete my profile'));
     await tester.pumpAndSettle();
     expect(find.byType(LearnerProfile), findsOneWidget);
-    expect(find.text('20%'), findsOneWidget);
+    expect(find.text('18%'), findsOneWidget);
     final locationField = find.widgetWithText(
       TextFormField,
       'Location (village, town or city)',
@@ -169,7 +177,7 @@ void main() {
       const Offset(0, 3000),
     );
     await tester.pumpAndSettle();
-    expect(find.text('30%'), findsOneWidget);
+    expect(find.text('27%'), findsOneWidget);
     repo.dispose();
   });
 
@@ -205,6 +213,44 @@ void main() {
     await openSection(tester, 'Events');
     expect(find.textContaining('Fee: 5000.00 UGX'), findsOneWidget);
     expect(find.textContaining('\nFree\n'), findsOneWidget);
+    repo.dispose();
+  });
+
+  testWidgets('Profile always opens the full learner profile form', (
+    tester,
+  ) async {
+    final repo = Repository(baseUrl: 'https://learning.test/api');
+    // Snapshot from a server without profile progress data.
+    repo.data = {
+      'user': {'id': 1, 'name': 'Learner', 'email': 'learner@example.test'},
+    };
+    await tester.pumpWidget(MaterialApp(home: Home(repo: repo)));
+    await tester.pumpAndSettle();
+    await openSection(tester, 'Profile');
+    await tester.tap(find.text('Edit learner profile'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LearnerProfile), findsOneWidget);
+    for (final label in [
+      'Course selection',
+      'Gender',
+      'Urban or rural',
+      'Are you a refugee?',
+      'Do you have a disability?',
+      'Education level',
+      'Are you currently employed?',
+    ]) {
+      await tester.scrollUntilVisible(
+        find.text(label),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(LearnerProfile),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      expect(find.text(label), findsOneWidget, reason: label);
+    }
     repo.dispose();
   });
 }

@@ -1033,43 +1033,27 @@ class _HomeState extends State<Home> {
       case 'Profile':
         final u = repo.data['user'] as Map? ?? {};
         return [
-          if (u.containsKey('profile_complete')) ...[
+          if (access.containsKey('profile_percent'))
             ProfileProgressCard(
               percent: profilePercent,
               missing: profileMissing,
             ),
-            FilledButton.icon(
-              onPressed: openLearnerProfile,
-              icon: const Icon(Icons.assignment_ind),
-              label: Text(
-                profileLocked
-                    ? 'Complete learner profile'
-                    : 'Update learner profile',
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
           card(
             u['name'] ?? 'Participant',
-            '${u['email'] ?? ''}\n${u['phone'] ?? ''}\n${u['district'] ?? ''}',
+            [
+              u['email'],
+              u['phone'],
+              u['location'] ?? u['district'],
+            ].where((v) => v != null && '$v'.isNotEmpty).join('\n'),
           ),
-          FilledButton(
-            onPressed: () => form('Edit profile', 'profile', [
-              FormFieldSpec('name', 'Full name', value: u['name']),
-              FormFieldSpec(
-                'phone',
-                'Phone',
-                required: false,
-                value: u['phone'],
-              ),
-              FormFieldSpec(
-                'district',
-                'District',
-                required: false,
-                value: u['district'],
-              ),
-            ]),
-            child: const Text('Edit profile'),
+          FilledButton.icon(
+            onPressed: openLearnerProfile,
+            icon: const Icon(Icons.assignment_ind),
+            label: Text(
+              profileLocked
+                  ? 'Complete learner profile'
+                  : 'Edit learner profile',
+            ),
           ),
           const SizedBox(height: 20),
           OutlinedButton(onPressed: signOut, child: const Text('Sign out')),
