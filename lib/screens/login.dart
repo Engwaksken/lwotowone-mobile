@@ -318,6 +318,7 @@ class _LoginState extends State<Login> {
           content: Text(
             'Could not open the password reset page. Please try again.',
           ),
+          duration: Duration(seconds: 5),
         ),
       );
     }

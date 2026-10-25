@@ -36,6 +36,7 @@ class Repository extends ChangeNotifier {
   bool busy = false;
   bool online = false;
   String? message;
+  Timer? _messageTimer;
   Directory? directory;
   String? owner;
   bool get loggedIn => token != null;
@@ -215,6 +216,8 @@ class Repository extends ChangeNotifier {
 
   Future<void> sync() async {
     if (busy || token == null) return;
+    _messageTimer?.cancel();
+    _messageTimer = null;
     busy = true;
     message = null;
     notifyListeners();
@@ -275,6 +278,15 @@ class Repository extends ChangeNotifier {
     } finally {
       busy = false;
       notifyListeners();
+      final shownMessage = message;
+      if (shownMessage != null) {
+        _messageTimer = Timer(const Duration(seconds: 5), () {
+          if (message == shownMessage) {
+            message = null;
+            notifyListeners();
+          }
+        });
+      }
     }
   }
 
@@ -619,6 +631,7 @@ class Repository extends ChangeNotifier {
 
   @override
   void dispose() {
+    _messageTimer?.cancel();
     client.close();
     super.dispose();
   }

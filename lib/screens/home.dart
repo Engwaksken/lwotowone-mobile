@@ -103,9 +103,12 @@ class _HomeState extends State<Home> {
       await action();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            duration: const Duration(seconds: 5),
+          ),
+        );
       }
     }
   }
@@ -212,30 +215,35 @@ class _HomeState extends State<Home> {
       ),
       body: Column(
         children: [
-          if (repo.message != null)
-            Material(
-              color: repo.online
-                  ? const Color(0xffe0f0e2)
-                  : const Color(0xffffeed1),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Icon(
-                      repo.online ? Icons.cloud_done : Icons.cloud_off,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        repo.message!,
-                        style: const TextStyle(fontSize: 12),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 350),
+            child: repo.message == null
+                ? const SizedBox.shrink(key: ValueKey('no-sync-message'))
+                : Material(
+                    key: ValueKey(repo.message),
+                    color: repo.online
+                        ? const Color(0xffe0f0e2)
+                        : const Color(0xffffeed1),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Icon(
+                            repo.online ? Icons.cloud_done : Icons.cloud_off,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              repo.message!,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
+                  ),
+          ),
           if (!['Overview', 'Profile', 'Pending'].contains(section))
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -578,7 +586,7 @@ class _HomeState extends State<Home> {
               crossAxisCount: constraints.maxWidth > 620 ? 3 : 2,
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
-              childAspectRatio: constraints.maxWidth > 620 ? 2.1 : 1.7,
+              childAspectRatio: constraints.maxWidth > 620 ? 3 : 2.5,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               children: [
@@ -1278,6 +1286,7 @@ class _HomeState extends State<Home> {
             content: Text(
               'Synchronise or review and discard pending work first.',
             ),
+            duration: Duration(seconds: 5),
           ),
         );
       }

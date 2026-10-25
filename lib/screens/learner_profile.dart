@@ -220,9 +220,12 @@ class _LearnerProfileState extends State<LearnerProfile> {
       });
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Learner profile saved.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Learner profile saved.'),
+            duration: Duration(seconds: 5),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
@@ -245,15 +248,21 @@ class _LearnerProfileState extends State<LearnerProfile> {
       user['profile_photo_url'] =
           (repo.data['user'] as Map?)?['profile_photo_url'];
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Profile photo updated.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile photo updated.'),
+            duration: Duration(seconds: 5),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            duration: const Duration(seconds: 5),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => photoBusy = false);

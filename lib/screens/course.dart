@@ -458,12 +458,18 @@ class _CourseScreenState extends State<CourseScreen> {
                 content: Text(
                   '${wasCompressed ? 'Compressed' : 'Saved'} video for offline viewing · ${formatBytes(size)}',
                 ),
+                duration: const Duration(seconds: 5),
               ),
             );
           }
         } catch (error) {
           if (mounted) {
-            messenger.showSnackBar(SnackBar(content: Text(error.toString())));
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(error.toString()),
+                duration: const Duration(seconds: 5),
+              ),
+            );
           }
         } finally {
           if (mounted) {
@@ -489,9 +495,12 @@ class _CourseScreenState extends State<CourseScreen> {
       await work();
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            duration: const Duration(seconds: 5),
+          ),
+        );
       }
     }
   }

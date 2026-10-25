@@ -94,6 +94,7 @@ class _ActionFormState extends State<ActionForm> {
                   ? 'Saved on this device. Synchronise to send.'
                   : 'Saved successfully.',
             ),
+            duration: const Duration(seconds: 5),
           ),
         );
       }
