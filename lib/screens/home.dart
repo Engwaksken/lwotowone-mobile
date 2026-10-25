@@ -9,6 +9,7 @@ import 'learning_progress.dart';
 import 'action_form.dart';
 import 'course.dart';
 import 'learner_profile.dart';
+import 'knowledge_game.dart';
 
 class Home extends StatefulWidget {
   final Repository repo;
@@ -38,6 +39,7 @@ class _HomeState extends State<Home> {
     'Overview': Icons.dashboard,
     'Learn': Icons.school,
     'Practice': Icons.handyman,
+    'Knowledge game': Icons.quiz_outlined,
     'Mentorship': Icons.groups,
     'Opportunities': Icons.work,
     'Enterprise': Icons.store,
@@ -201,6 +203,7 @@ class _HomeState extends State<Home> {
                     drawerGroup('BUSINESS & COMMUNITY', [
                       'Enterprise',
                       'Events',
+                      'Knowledge game',
                       'Notifications',
                     ]),
                     drawerGroup('ACCOUNT', ['Pending', 'Profile']),
@@ -581,6 +584,7 @@ class _HomeState extends State<Home> {
                 for (final key in [
                   'Learn',
                   'Practice',
+                  'Knowledge game',
                   'Mentorship',
                   'Opportunities',
                   'Enterprise',
@@ -696,6 +700,23 @@ class _HomeState extends State<Home> {
             (r) => card(
               r['title'],
               '${r['status']} · ${r['minutes']} minutes · ${r['practised_on']}\n${r['body']}\n${r['feedback'] ?? ''}',
+            ),
+          ),
+        ];
+      case 'Knowledge game':
+        return [
+          card(
+            'Farming & poultry quiz',
+            'Play a short knowledge challenge, check your score and learn from each answer.',
+            button: FilledButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => KnowledgeGameScreen(repo: repo),
+                ),
+              ),
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('Play knowledge game'),
             ),
           ),
         ];
