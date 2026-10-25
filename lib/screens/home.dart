@@ -1132,31 +1132,35 @@ class _HomeState extends State<Home> {
     child: Text(title, style: Theme.of(context).textTheme.titleLarge),
   );
   Widget dashboardStat(String title, String value, IconData icon) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(15),
       border: Border.all(color: const Color(0xffdce5df)),
     ),
-    child: Row(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: const Color(0xff175742), size: 20),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelMedium,
-          ),
+        Row(
+          children: [
+            Icon(icon, color: const Color(0xff175742), size: 20),
+            const Spacer(),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: const Color(0xff163c30),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 8),
+        const SizedBox(height: 2),
         Text(
-          value,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: const Color(0xff163c30),
-            fontWeight: FontWeight.w800,
-          ),
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelMedium,
         ),
       ],
     ),
