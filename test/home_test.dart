@@ -4,7 +4,7 @@ import 'package:lwotowone_mobile/services/repository.dart';
 import 'package:lwotowone_mobile/screens/home.dart';
 
 void main() {
-  testWidgets('Dashboard keeps statistics cards to three per row on mobile', (
+  testWidgets('Dashboard uses two stats per row and sections use three', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -24,8 +24,20 @@ void main() {
     final third = tester.getTopLeft(find.text('My enterprises'));
     final fourth = tester.getTopLeft(find.text('Pending sync'));
     expect(second.dy, first.dy);
-    expect(third.dy, first.dy);
-    expect(fourth.dy, greaterThan(first.dy));
+    expect(third.dy, greaterThan(first.dy));
+    expect(fourth.dy, third.dy);
+
+    await tester.tap(find.byTooltip('Open navigation menu'));
+    await tester.pumpAndSettle();
+    final learn = find.descendant(
+      of: find.byType(Drawer),
+      matching: find.text('Learn'),
+    );
+    await tester.tap(learn);
+    await tester.pumpAndSettle();
+    final available = tester.getTopLeft(find.text('Available courses'));
+    expect(tester.getTopLeft(find.text('My courses')).dy, available.dy);
+    expect(tester.getTopLeft(find.text('Lessons done')).dy, available.dy);
     expect(tester.takeException(), isNull);
     repo.dispose();
   });

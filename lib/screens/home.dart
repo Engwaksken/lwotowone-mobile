@@ -569,7 +569,7 @@ class _HomeState extends State<Home> {
               repo.pending.length.toString(),
               Icons.sync_problem,
             ),
-          ]),
+          ], maxColumns: 2),
           const SizedBox(height: 24),
           heading('Explore'),
           LayoutBuilder(
@@ -1294,13 +1294,13 @@ class _HomeState extends State<Home> {
     padding: const EdgeInsets.only(top: 22, bottom: 12),
     child: Text(title, style: Theme.of(context).textTheme.titleLarge),
   );
-  Widget metricCards(List<Widget> cards) => LayoutBuilder(
+  Widget metricCards(List<Widget> cards, {int maxColumns = 3}) => LayoutBuilder(
     builder: (context, constraints) {
       if (cards.isEmpty || constraints.maxWidth <= 0) {
         return const SizedBox.shrink();
       }
       const spacing = 10.0;
-      final columns = math.min(cards.length, 3);
+      final columns = math.min(cards.length, maxColumns);
       final width = math.min(
         240.0,
         (constraints.maxWidth - spacing * (columns - 1)) / columns,
