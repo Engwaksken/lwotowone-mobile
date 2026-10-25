@@ -69,27 +69,6 @@ class _HomeState extends State<Home> {
     missing: profileMissing,
     onComplete: openLearnerProfile,
   );
-  Widget? freeAccessBanner() {
-    if (access['free_access'] != true) return null;
-    final ends = DateTime.tryParse('${access['free_access_ends_at'] ?? ''}');
-    final until = ends == null
-        ? 'for now. No payment is needed.'
-        : 'until ${ends.toLocal().toString().substring(0, 16)}. After that, you can subscribe or pay to keep learning.';
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xffe8f2ec),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xffbcd8c6)),
-      ),
-      child: Text(
-        'Free access: all courses, learning materials and events are free $until',
-        style: const TextStyle(color: Color(0xff175742)),
-      ),
-    );
-  }
-
   List<Map<String, dynamic>> list(String key) => repo
       .rows(key)
       .where(
@@ -462,14 +441,12 @@ class _HomeState extends State<Home> {
         const Text('This section opens once your learner profile is complete.'),
       ];
     }
-    final banner = freeAccessBanner();
     switch (section) {
       case 'Overview':
         final learnerName =
             (repo.data['user'] as Map?)?['name']?.toString().trim() ?? '';
         return [
           if (profileLocked) profileProgress(),
-          ?banner,
           Container(
             padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
@@ -552,7 +529,7 @@ class _HomeState extends State<Home> {
               crossAxisCount: constraints.maxWidth > 620 ? 4 : 2,
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
-              childAspectRatio: constraints.maxWidth > 620 ? 1.75 : 1.5,
+              childAspectRatio: constraints.maxWidth > 620 ? 3.1 : 2.7,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               children: [
@@ -1155,29 +1132,31 @@ class _HomeState extends State<Home> {
     child: Text(title, style: Theme.of(context).textTheme.titleLarge),
   );
   Widget dashboardStat(String title, String value, IconData icon) => Container(
-    padding: const EdgeInsets.all(14),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(15),
       border: Border.all(color: const Color(0xffdce5df)),
     ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    child: Row(
       children: [
         Icon(icon, color: const Color(0xff175742), size: 20),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+        ),
+        const SizedBox(width: 8),
         Text(
           value,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
             color: const Color(0xff163c30),
             fontWeight: FontWeight.w800,
           ),
-        ),
-        Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelMedium,
         ),
       ],
     ),

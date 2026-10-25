@@ -135,7 +135,7 @@ void main() {
       find.textContaining('Still needed: Course choice, Gender'),
       findsOneWidget,
     );
-    expect(find.textContaining('Free access:'), findsOneWidget);
+    expect(find.textContaining('Free access:'), findsNothing);
 
     await openSection(tester, 'Learn');
     expect(
