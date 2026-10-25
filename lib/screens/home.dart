@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../services/repository.dart';
@@ -17,6 +19,16 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> {
   String section = 'Overview', search = '';
+  bool searchOpen = false;
+  static const searchableSections = {
+    'Learn',
+    'Practice',
+    'Mentorship',
+    'Opportunities',
+    'Enterprise',
+    'Events',
+    'Notifications',
+  };
   EarningsPeriod earningsPeriod = EarningsPeriod.all;
   String? enterpriseFilter;
   DateTimeRange? earningsRange;
@@ -96,6 +108,7 @@ class _HomeState extends State<Home> {
     setState(() {
       section = value;
       search = '';
+      searchOpen = false;
     });
     Navigator.pop(context);
   }
@@ -132,8 +145,27 @@ class _HomeState extends State<Home> {
     animation: repo,
     builder: (context, _) => Scaffold(
       appBar: AppBar(
-        title: Text(section == 'Overview' ? 'Lwotowone' : section),
+        title: searchOpen
+            ? TextField(
+                key: ValueKey('search-$section'),
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration.collapsed(
+                  hintText: 'Search $section',
+                ),
+                onChanged: (value) => setState(() => search = value),
+              )
+            : Text(section == 'Overview' ? 'Lwotowone' : section),
         actions: [
+          if (searchableSections.contains(section))
+            IconButton(
+              tooltip: searchOpen ? 'Close search' : 'Search',
+              onPressed: () => setState(() {
+                searchOpen = !searchOpen;
+                if (!searchOpen) search = '';
+              }),
+              icon: Icon(searchOpen ? Icons.close : Icons.search),
+            ),
           IconButton(
             tooltip: 'Synchronise',
             onPressed: repo.busy ? null : repo.sync,
@@ -223,18 +255,6 @@ class _HomeState extends State<Home> {
                     ),
                   ),
           ),
-          if (!['Overview', 'Profile', 'Pending'].contains(section))
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: TextField(
-                key: ValueKey(section),
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'Search',
-                ),
-                onChanged: (v) => setState(() => search = v),
-              ),
-            ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: repo.sync,
@@ -269,6 +289,7 @@ class _HomeState extends State<Home> {
               onDestinationSelected: (i) => setState(() {
                 section = ['Overview', 'Learn', 'Mentorship', 'Enterprise'][i];
                 search = '';
+                searchOpen = false;
               }),
               destinations: const [
                 NavigationDestination(
@@ -524,38 +545,28 @@ class _HomeState extends State<Home> {
             ),
           ),
           const SizedBox(height: 18),
-          LayoutBuilder(
-            builder: (context, constraints) => GridView.count(
-              crossAxisCount: constraints.maxWidth > 620 ? 4 : 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: constraints.maxWidth > 620 ? 3.1 : 2.7,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                dashboardStat(
-                  'Courses',
-                  repo.rows('enrolments').length.toString(),
-                  Icons.menu_book_outlined,
-                ),
-                dashboardStat(
-                  'Lessons done',
-                  repo.rows('lesson_progress').length.toString(),
-                  Icons.task_alt,
-                ),
-                dashboardStat(
-                  'My enterprises',
-                  repo.rows('enterprises').length.toString(),
-                  Icons.storefront_outlined,
-                ),
-                dashboardStat(
-                  'Pending sync',
-                  repo.pending.length.toString(),
-                  Icons.sync_problem,
-                ),
-              ],
+          metricCards([
+            dashboardStat(
+              'Courses',
+              repo.rows('enrolments').length.toString(),
+              Icons.menu_book_outlined,
             ),
-          ),
+            dashboardStat(
+              'Lessons done',
+              repo.rows('lesson_progress').length.toString(),
+              Icons.task_alt,
+            ),
+            dashboardStat(
+              'My enterprises',
+              repo.rows('enterprises').length.toString(),
+              Icons.storefront_outlined,
+            ),
+            dashboardStat(
+              'Pending sync',
+              repo.pending.length.toString(),
+              Icons.sync_problem,
+            ),
+          ]),
           const SizedBox(height: 24),
           heading('Explore'),
           LayoutBuilder(
@@ -583,48 +594,81 @@ class _HomeState extends State<Home> {
           ...repo.rows('announcements').map((r) => card(r['title'], r['body'])),
         ];
       case 'Learn':
-        return emptyAware(
-          'courses',
-          list('courses').map((c) {
-            final enrolled = repo
-                .rows('enrolments')
-                .any((e) => e['course_id'] == c['id']);
-            return card(
-              c['title'],
-              '${c['level']} · ${c['duration_hours']} hours\n${c['summary']}',
-              button: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (enrolled)
-                    LearningProgressView(
-                      progress: CourseProgress.fromData(repo.data, c['id']),
-                    ),
-                  FilledButton(
-                    onPressed: repo.busy
-                        ? null
-                        : () => enrolled
-                              ? Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        CourseScreen(repo: repo, course: c),
-                                  ),
-                                )
-                              : run(
-                                  () =>
-                                      repo.act('enrol', {'course_id': c['id']}),
-                                ),
-                    child: Text(
-                      enrolled ? 'Open downloaded lessons' : 'Enrol (online)',
-                    ),
+        final courses = list('courses').map((c) {
+          final enrolled = repo
+              .rows('enrolments')
+              .any((e) => e['course_id'] == c['id']);
+          return card(
+            c['title'],
+            '${c['level']} · ${c['duration_hours']} hours\n${c['summary']}',
+            button: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (enrolled)
+                  LearningProgressView(
+                    progress: CourseProgress.fromData(repo.data, c['id']),
                   ),
-                ],
-              ),
-            );
-          }).toList(),
-        );
-      case 'Practice':
+                FilledButton(
+                  onPressed: repo.busy
+                      ? null
+                      : () => enrolled
+                            ? Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      CourseScreen(repo: repo, course: c),
+                                ),
+                              )
+                            : run(
+                                () => repo.act('enrol', {'course_id': c['id']}),
+                              ),
+                  child: Text(
+                    enrolled ? 'Open downloaded lessons' : 'Enrol (online)',
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList();
         return [
+          metricCards([
+            dashboardStat(
+              'Available courses',
+              repo.rows('courses').length.toString(),
+              Icons.menu_book_outlined,
+            ),
+            dashboardStat(
+              'My courses',
+              repo.rows('enrolments').length.toString(),
+              Icons.school_outlined,
+            ),
+            dashboardStat(
+              'Lessons done',
+              repo.rows('lesson_progress').length.toString(),
+              Icons.task_alt,
+            ),
+          ]),
+          ...emptyAware('courses', courses),
+        ];
+      case 'Practice':
+        final practiceLogs = repo.rows('practice_logs');
+        final minutesPracticed = practiceLogs.fold<num>(
+          0,
+          (total, row) => total + (num.tryParse('${row['minutes']}') ?? 0),
+        );
+        return [
+          metricCards([
+            dashboardStat(
+              'Activities',
+              practiceLogs.length.toString(),
+              Icons.handyman_outlined,
+            ),
+            dashboardStat(
+              'Hours logged',
+              (minutesPracticed / 60).toStringAsFixed(1),
+              Icons.schedule_outlined,
+            ),
+          ]),
           FilledButton.icon(
             onPressed: () => form('Record practical activity', 'practice', [
               FormFieldSpec('skill_id', 'Skill', options: options('skills')),
@@ -657,6 +701,23 @@ class _HomeState extends State<Home> {
         ];
       case 'Mentorship':
         return [
+          metricCards([
+            dashboardStat(
+              'Mentors',
+              repo.rows('mentors').length.toString(),
+              Icons.groups_outlined,
+            ),
+            dashboardStat(
+              'Sessions',
+              repo.rows('slots').length.toString(),
+              Icons.event_available_outlined,
+            ),
+            dashboardStat(
+              'My requests',
+              repo.rows('bookings').length.toString(),
+              Icons.chat_bubble_outline,
+            ),
+          ]),
           heading('Mentors'),
           ...list('mentors').map(
             (m) =>
@@ -703,6 +764,18 @@ class _HomeState extends State<Home> {
         ];
       case 'Opportunities':
         return [
+          metricCards([
+            dashboardStat(
+              'Open opportunities',
+              repo.rows('opportunities').length.toString(),
+              Icons.work_outline,
+            ),
+            dashboardStat(
+              'My applications',
+              repo.rows('applications').length.toString(),
+              Icons.assignment_outlined,
+            ),
+          ]),
           heading('Open opportunities'),
           ...list('opportunities').map((o) {
             final applications = repo
@@ -794,15 +867,23 @@ class _HomeState extends State<Home> {
               ),
             ),
           const SizedBox(height: 18),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              stat('Income UGX', earnings.income.toStringAsFixed(0)),
-              stat('Expenses UGX', earnings.expense.toStringAsFixed(0)),
-              stat('Net UGX', earnings.net.toStringAsFixed(0)),
-            ],
-          ),
+          metricCards([
+            dashboardStat(
+              'Income UGX',
+              earnings.income.toStringAsFixed(0),
+              Icons.trending_up,
+            ),
+            dashboardStat(
+              'Expenses UGX',
+              earnings.expense.toStringAsFixed(0),
+              Icons.trending_down,
+            ),
+            dashboardStat(
+              'Net UGX',
+              earnings.net.toStringAsFixed(0),
+              Icons.account_balance_wallet_outlined,
+            ),
+          ]),
           const SizedBox(height: 18),
           FilledButton.icon(
             onPressed: () =>
@@ -919,6 +1000,24 @@ class _HomeState extends State<Home> {
         ];
       case 'Events':
         return [
+          metricCards([
+            dashboardStat(
+              'Upcoming events',
+              repo.rows('events').length.toString(),
+              Icons.event_outlined,
+            ),
+            dashboardStat(
+              'My registrations',
+              repo
+                  .rows('event_registrations')
+                  .where(
+                    (registration) => registration['status'] == 'registered',
+                  )
+                  .length
+                  .toString(),
+              Icons.event_available_outlined,
+            ),
+          ]),
           ...list('events').map((event) {
             final registrations = repo
                 .rows('event_registrations')
@@ -995,25 +1094,56 @@ class _HomeState extends State<Home> {
               ),
         ];
       case 'Notifications':
-        return emptyAware(
-          'notifications',
-          list('notifications')
-              .map(
-                (n) => card(
-                  n['data']['title'] ?? 'Notification',
-                  n['data']['body'] ?? '',
-                  button: n['read_at'] == null
-                      ? TextButton(
-                          onPressed: () => run(() => repo.readNotice(n['id'])),
-                          child: const Text('Mark read'),
-                        )
-                      : const Text('Read'),
-                ),
-              )
-              .toList(),
-        );
+        final notices = list('notifications')
+            .map(
+              (n) => card(
+                n['data']['title'] ?? 'Notification',
+                n['data']['body'] ?? '',
+                button: n['read_at'] == null
+                    ? TextButton(
+                        onPressed: () => run(() => repo.readNotice(n['id'])),
+                        child: const Text('Mark read'),
+                      )
+                    : const Text('Read'),
+              ),
+            )
+            .toList();
+        final unread = repo
+            .rows('notifications')
+            .where((notice) => notice['read_at'] == null)
+            .length;
+        return [
+          metricCards([
+            dashboardStat(
+              'Unread',
+              unread.toString(),
+              Icons.mark_email_unread_outlined,
+            ),
+            dashboardStat(
+              'All notices',
+              repo.rows('notifications').length.toString(),
+              Icons.notifications_none,
+            ),
+          ]),
+          ...emptyAware('notifications', notices),
+        ];
       case 'Pending':
         return [
+          metricCards([
+            dashboardStat(
+              'Pending items',
+              repo.pending.length.toString(),
+              Icons.sync_problem,
+            ),
+            dashboardStat(
+              'Need attention',
+              repo.pending
+                  .where((item) => item['error'] != null)
+                  .length
+                  .toString(),
+              Icons.warning_amber_outlined,
+            ),
+          ]),
           const Text(
             'Work is kept on this device until accepted by the server. Validation failures remain visible below. Discarding removes only the pending device copy.',
           ),
@@ -1049,6 +1179,18 @@ class _HomeState extends State<Home> {
       case 'Profile':
         final u = repo.data['user'] as Map? ?? {};
         return [
+          metricCards([
+            dashboardStat(
+              'Profile complete',
+              '$profilePercent%',
+              Icons.account_circle_outlined,
+            ),
+            dashboardStat(
+              'Pending sync',
+              repo.pending.length.toString(),
+              Icons.sync_problem,
+            ),
+          ]),
           if (access.containsKey('profile_percent'))
             ProfileProgressCard(
               percent: profilePercent,
@@ -1131,6 +1273,30 @@ class _HomeState extends State<Home> {
     padding: const EdgeInsets.only(top: 22, bottom: 12),
     child: Text(title, style: Theme.of(context).textTheme.titleLarge),
   );
+  Widget metricCards(List<Widget> cards) => LayoutBuilder(
+    builder: (context, constraints) {
+      const spacing = 10.0;
+      final columns = constraints.maxWidth > 620
+          ? math.min(cards.length, 4)
+          : 2;
+      final width = math.min(
+        240.0,
+        (constraints.maxWidth - spacing * (columns - 1)) / columns,
+      );
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final card in cards)
+              SizedBox(width: width, height: 68, child: card),
+          ],
+        ),
+      );
+    },
+  );
   Widget dashboardStat(String title, String value, IconData icon) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
     decoration: BoxDecoration(
@@ -1174,6 +1340,7 @@ class _HomeState extends State<Home> {
       onTap: () => setState(() {
         section = title;
         search = '';
+        searchOpen = false;
       }),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1200,24 +1367,6 @@ class _HomeState extends State<Home> {
     ),
   );
 
-  Widget stat(String title, String value) => Container(
-    width: 150,
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: const Border(
-        left: BorderSide(color: Color(0xffdfb452), width: 4),
-      ),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(value, style: Theme.of(context).textTheme.headlineSmall),
-        Text(title),
-      ],
-    ),
-  );
   Widget card(String title, String body, {Widget? button}) => Card(
     child: Padding(
       padding: const EdgeInsets.all(18),
