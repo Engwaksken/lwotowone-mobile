@@ -339,13 +339,6 @@ class _HomeState extends State<Home> {
                   ),
                 ),
               ),
-              Image.asset(
-                'assets/brand/logo.png',
-                width: 42,
-                height: 42,
-                fit: BoxFit.contain,
-                semanticLabel: 'Lwotowone Enterprises Limited',
-              ),
             ],
           ),
           const SizedBox(height: 11),
@@ -450,6 +443,8 @@ class _HomeState extends State<Home> {
     final banner = freeAccessBanner();
     switch (section) {
       case 'Overview':
+        final learnerName =
+            (repo.data['user'] as Map?)?['name']?.toString().trim() ?? '';
         return [
           if (profileLocked) profileProgress(),
           ?banner,
@@ -458,50 +453,72 @@ class _HomeState extends State<Home> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               gradient: const LinearGradient(
-                colors: [Color(0xffe8f1e9), Color(0xfff6f3e8)],
+                colors: [Color(0xff174f3d), Color(0xff246b4e)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x24174f3d),
+                  blurRadius: 18,
+                  offset: Offset(0, 8),
+                ),
+              ],
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'PARTICIPANT DASHBOARD',
-                        style: TextStyle(
-                          color: Color(0xff175742),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.3,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Welcome, ${repo.data['user']?['name'] ?? 'learner'}',
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(
-                              color: const Color(0xff163c30),
-                              fontWeight: FontWeight.w800,
-                            ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Learn, build practical skills, and grow your enterprise.',
-                      ),
-                    ],
+                Text(
+                  'LEARNER DASHBOARD',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .76),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.4,
                   ),
                 ),
-                const SizedBox(width: 12),
-                ClipOval(
-                  child: Image.asset(
-                    'assets/brand/logo.png',
-                    width: 56,
-                    height: 56,
-                    fit: BoxFit.cover,
-                    semanticLabel: 'Lwotowone Enterprises Limited',
+                const SizedBox(height: 9),
+                Text(
+                  learnerName.isEmpty
+                      ? 'Welcome back'
+                      : 'Welcome, $learnerName',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .14),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 7,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          repo.online ? Icons.cloud_done : Icons.cloud_off,
+                          size: 16,
+                          color: const Color(0xffffd878),
+                        ),
+                        const SizedBox(width: 7),
+                        Text(
+                          repo.online ? 'Synced' : 'Offline ready',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -541,7 +558,7 @@ class _HomeState extends State<Home> {
             ),
           ),
           const SizedBox(height: 24),
-          heading('Your next step'),
+          heading('Explore'),
           LayoutBuilder(
             builder: (context, constraints) => GridView.count(
               crossAxisCount: constraints.maxWidth > 620 ? 3 : 2,
@@ -563,18 +580,8 @@ class _HomeState extends State<Home> {
               ],
             ),
           ),
-          heading('Announcements'),
-          if (repo.rows('announcements').isEmpty)
-            const Text('No new announcements right now.'),
+          if (repo.rows('announcements').isNotEmpty) heading('Updates'),
           ...repo.rows('announcements').map((r) => card(r['title'], r['body'])),
-          const SizedBox(height: 20),
-          Text(
-            'Last downloaded: ${repo.data['synced_at'] ?? 'Not yet synchronised'}',
-            style: const TextStyle(fontSize: 12),
-          ),
-          const Text(
-            'Synchronise to save authorized lessons and files. Save downloadable videos individually from a lesson to compress and watch offline. Streaming links still need internet.',
-          ),
         ];
       case 'Learn':
         return emptyAware(
