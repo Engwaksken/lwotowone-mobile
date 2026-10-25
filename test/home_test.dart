@@ -4,6 +4,32 @@ import 'package:lwotowone_mobile/services/repository.dart';
 import 'package:lwotowone_mobile/screens/home.dart';
 
 void main() {
+  testWidgets('Dashboard keeps statistics cards to three per row on mobile', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repo = Repository(baseUrl: 'https://learning.test/api');
+    repo.data = {
+      'user': {'id': 1, 'name': 'Learner'},
+    };
+    await tester.pumpWidget(MaterialApp(home: Home(repo: repo)));
+    await tester.pumpAndSettle();
+
+    final first = tester.getTopLeft(find.text('Courses'));
+    final second = tester.getTopLeft(find.text('Lessons done'));
+    final third = tester.getTopLeft(find.text('My enterprises'));
+    final fourth = tester.getTopLeft(find.text('Pending sync'));
+    expect(second.dy, first.dy);
+    expect(third.dy, first.dy);
+    expect(fourth.dy, greaterThan(first.dy));
+    expect(tester.takeException(), isNull);
+    repo.dispose();
+  });
+
   testWidgets('Search opens from the toolbar icon and filters the section', (
     tester,
   ) async {

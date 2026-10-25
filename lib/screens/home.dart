@@ -1296,10 +1296,11 @@ class _HomeState extends State<Home> {
   );
   Widget metricCards(List<Widget> cards) => LayoutBuilder(
     builder: (context, constraints) {
+      if (cards.isEmpty || constraints.maxWidth <= 0) {
+        return const SizedBox.shrink();
+      }
       const spacing = 10.0;
-      final columns = constraints.maxWidth > 620
-          ? math.min(cards.length, 4)
-          : 2;
+      final columns = math.min(cards.length, 3);
       final width = math.min(
         240.0,
         (constraints.maxWidth - spacing * (columns - 1)) / columns,
@@ -1332,12 +1333,20 @@ class _HomeState extends State<Home> {
         Row(
           children: [
             Icon(icon, color: const Color(0xff175742), size: 20),
-            const Spacer(),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: const Color(0xff163c30),
-                fontWeight: FontWeight.w800,
+            const SizedBox(width: 4),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    value,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: const Color(0xff163c30),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
