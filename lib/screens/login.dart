@@ -124,11 +124,14 @@ class _LoginState extends State<Login> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Image.asset(
-                  'assets/brand/logo.png',
-                  height: 180,
-                  fit: BoxFit.contain,
-                  semanticLabel: 'Lwotowone Enterprises Limited',
+                Center(
+                  child: Image.asset(
+                    'assets/brand/logo.png',
+                    width: 136,
+                    height: 136,
+                    fit: BoxFit.contain,
+                    semanticLabel: 'Lwotowone Enterprises Limited',
+                  ),
                 ),
                 const SizedBox(height: 16),
                 const Text(

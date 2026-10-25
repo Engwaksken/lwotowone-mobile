@@ -47,6 +47,10 @@ Before distribution, review the included green-and-gold L lettermark or replace 
 
 Email notices are sent by the Laravel queue; mobile sees database notices on the next sync. The app does not deliver remote notifications while a device has no connectivity. Financial records are self-entered and do not process payments.
 
+## Learner profile photos
+
+From **Profile → Edit learner profile**, choose **Add or change photo** to select a JPG, PNG or WebP image (up to 5 MB). Uploading requires internet. Photos are stored privately and served only to the signed-in learner. Deploy the matching Laravel API update and run `php artisan migrate --force` before using photo uploads.
+
 ## Source map
 
 - `lib/services/repository.dart`: API, token storage, snapshot persistence, offline queue, resource downloads.

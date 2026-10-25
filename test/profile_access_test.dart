@@ -230,6 +230,7 @@ void main() {
     await tester.tap(find.text('Edit learner profile'));
     await tester.pumpAndSettle();
     expect(find.byType(LearnerProfile), findsOneWidget);
+    expect(find.text('Add or change photo'), findsOneWidget);
     for (final label in [
       'Course selection',
       'Gender',
@@ -247,7 +248,7 @@ void main() {
               of: find.byType(LearnerProfile),
               matching: find.byType(Scrollable),
             )
-            .first,
+            .last,
       );
       expect(find.text(label), findsOneWidget, reason: label);
     }

@@ -325,6 +325,53 @@ class Repository extends ChangeNotifier {
     await sync();
   }
 
+  Future<void> uploadProfilePhoto(File photo) async {
+    final problem = ApiConfig.validate(baseUrl);
+    if (problem != null) throw ApiFailure(problem, 0);
+    final uri = Uri.parse('$baseUrl/profile/photo');
+    final request = http.MultipartRequest('POST', uri)
+      ..headers.addAll({
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      })
+      ..files.add(await http.MultipartFile.fromPath('photo', photo.path));
+    http.Response response;
+    try {
+      response = await http.Response.fromStream(
+        await client.send(request).timeout(const Duration(seconds: 30)),
+      );
+    } on SocketException {
+      throw ApiFailure('No connection. Try again when you are online.', 0);
+    } on TimeoutException {
+      throw ApiFailure('The upload took too long. Try again.', 0);
+    } on http.ClientException {
+      throw ApiFailure('Could not connect. Check your internet connection.', 0);
+    }
+    Map<String, dynamic> result;
+    try {
+      result = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+    } catch (_) {
+      throw ApiFailure(
+        'The server returned an unexpected response.',
+        response.statusCode,
+      );
+    }
+    if (response.statusCode >= 400) {
+      final errors = result['errors'];
+      final message = errors is Map
+          ? errors.values
+                .map((value) => value is List ? value.join(' ') : '$value')
+                .join('\n')
+          : result['message']?.toString() ?? 'Photo upload failed.';
+      throw ApiFailure(message, response.statusCode);
+    }
+    final user = Map<String, dynamic>.from(data['user'] as Map? ?? {});
+    user['profile_photo_url'] = result['profile_photo_url'];
+    data['user'] = user;
+    await _save('snapshot', data);
+    notifyListeners();
+  }
+
   Future<void> readNotice(String id) async {
     await request('POST', '/notifications/$id/read');
     await sync();

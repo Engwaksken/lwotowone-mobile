@@ -304,6 +304,8 @@ class _HomeState extends State<Home> {
     final user = repo.data['user'] as Map? ?? {};
     final name = (user['name'] ?? 'Participant').toString();
     final email = (user['email'] ?? '').toString();
+    final photoUrl = (user['profile_photo_url'] ?? '').toString();
+    final initial = name.isEmpty ? 'L' : name.characters.first.toUpperCase();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
@@ -323,10 +325,22 @@ class _HomeState extends State<Home> {
                 radius: 21,
                 backgroundColor: const Color(0xffe5c16a),
                 foregroundColor: const Color(0xff163c30),
-                child: Text(
-                  name.isEmpty ? 'L' : name.characters.first.toUpperCase(),
-                  style: const TextStyle(fontWeight: FontWeight.w800),
-                ),
+                child: photoUrl.isEmpty
+                    ? Text(
+                        initial,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      )
+                    : ClipOval(
+                        child: Image.network(
+                          photoUrl,
+                          width: 42,
+                          height: 42,
+                          fit: BoxFit.cover,
+                          headers: {'Authorization': 'Bearer ${repo.token}'},
+                          errorBuilder: (_, _, _) =>
+                              Center(child: Text(initial)),
+                        ),
+                      ),
               ),
               const SizedBox(width: 11),
               const Expanded(

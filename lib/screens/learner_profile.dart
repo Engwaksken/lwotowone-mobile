@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../services/repository.dart';
 
@@ -115,6 +118,7 @@ class _LearnerProfileState extends State<LearnerProfile> {
   String? course, gender, urbanRural, settlement, impairment, education;
   bool? refugee, pwd, employed;
   bool busy = false;
+  bool photoBusy = false;
   String? error;
 
   Repository get repo => widget.repo;
@@ -227,6 +231,35 @@ class _LearnerProfileState extends State<LearnerProfile> {
     }
   }
 
+  Future<void> chooseProfilePhoto() async {
+    try {
+      final selected = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1200,
+        maxHeight: 1200,
+      );
+      if (selected == null || !mounted) return;
+      setState(() => photoBusy = true);
+      await repo.uploadProfilePhoto(File(selected.path));
+      user['profile_photo_url'] =
+          (repo.data['user'] as Map?)?['profile_photo_url'];
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Profile photo updated.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => photoBusy = false);
+    }
+  }
+
   String? required(String? v) =>
       v == null || v.trim().isEmpty ? 'This field is required' : null;
 
@@ -287,6 +320,76 @@ class _LearnerProfileState extends State<LearnerProfile> {
           padding: const EdgeInsets.all(20),
           children: [
             ProfileProgressCard(percent: percent),
+            Center(
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 48,
+                    backgroundColor: const Color(0xffe8f0eb),
+                    child: ClipOval(
+                      child:
+                          (user['profile_photo_url'] ?? '').toString().isEmpty
+                          ? Text(
+                              name.text.trim().isEmpty
+                                  ? 'L'
+                                  : name.text
+                                        .trim()
+                                        .characters
+                                        .first
+                                        .toUpperCase(),
+                              style: const TextStyle(
+                                color: Color(0xff175742),
+                                fontSize: 30,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            )
+                          : Image.network(
+                              user['profile_photo_url'].toString(),
+                              width: 96,
+                              height: 96,
+                              fit: BoxFit.cover,
+                              headers: {
+                                'Authorization': 'Bearer ${repo.token}',
+                              },
+                              errorBuilder: (_, _, _) => Center(
+                                child: Text(
+                                  name.text.trim().isEmpty
+                                      ? 'L'
+                                      : name.text
+                                            .trim()
+                                            .characters
+                                            .first
+                                            .toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Color(0xff175742),
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: photoBusy ? null : chooseProfilePhoto,
+                    icon: photoBusy
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add_a_photo_outlined),
+                    label: Text(
+                      photoBusy ? 'Uploading…' : 'Add or change photo',
+                    ),
+                  ),
+                  Text(
+                    'JPG, PNG or WebP · max 5 MB',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
             heading('Personal and course'),
             text(name, 'Full name', validator: required),
             text(
