@@ -124,17 +124,13 @@ class _LoginState extends State<Login> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.eco, size: 64, color: Color(0xff175742)),
-                const SizedBox(height: 16),
-                Text(
-                  'LWOTOWONE',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: const Color(0xff163c30),
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
-                  ),
+                Image.asset(
+                  'assets/brand/logo.png',
+                  height: 180,
+                  fit: BoxFit.contain,
+                  semanticLabel: 'Lwotowone Enterprises Limited',
                 ),
+                const SizedBox(height: 16),
                 const Text(
                   'Learn to Earn. Earn to Grow.',
                   textAlign: TextAlign.center,

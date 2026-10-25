@@ -339,7 +339,13 @@ class _HomeState extends State<Home> {
                   ),
                 ),
               ),
-              const Icon(Icons.eco, color: Color(0xffe5c16a)),
+              Image.asset(
+                'assets/brand/logo.png',
+                width: 42,
+                height: 42,
+                fit: BoxFit.contain,
+                semanticLabel: 'Lwotowone Enterprises Limited',
+              ),
             ],
           ),
           const SizedBox(height: 11),
@@ -489,10 +495,14 @@ class _HomeState extends State<Home> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                const CircleAvatar(
-                  radius: 28,
-                  backgroundColor: Color(0xff175742),
-                  child: Icon(Icons.eco, color: Color(0xffe5c16a), size: 27),
+                ClipOval(
+                  child: Image.asset(
+                    'assets/brand/logo.png',
+                    width: 56,
+                    height: 56,
+                    fit: BoxFit.cover,
+                    semanticLabel: 'Lwotowone Enterprises Limited',
+                  ),
                 ),
               ],
             ),
