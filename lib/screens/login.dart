@@ -299,7 +299,7 @@ class _LoginState extends State<Login> {
                   ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Internet is needed to sign in and download learning content. You can read downloaded lessons offline.',
+                  'Internet is needed to sign in and to watch or read lessons. Lessons saved through an approved download open offline.',
                   textAlign: TextAlign.center,
                 ),
               ],
