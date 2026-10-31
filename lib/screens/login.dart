@@ -323,7 +323,7 @@ class _LoginState extends State<Login> {
     var opened = false;
     try {
       opened = await launchUrl(
-        Uri.https('cms.kemmytech.com', '/forgot-password'),
+        Uri.https('www.lwotowone.com', '/forgot-password'),
         mode: LaunchMode.externalApplication,
       );
     } catch (_) {

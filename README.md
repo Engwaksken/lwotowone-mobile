@@ -25,15 +25,15 @@ flutter test
 flutter run
 ```
 
-The app defaults to the official API at `https://cms.kemmytech.com/api`. To use another deployment, pass `--dart-define=API_BASE_URL=https://YOUR-DOMAIN/api`. Run the Laravel migrations and seed administrator first, then publish courses and register a participant. Administrators and staff use the web portal; mobile login is participant-only.
+The app defaults to the official API at `https://www.lwotowone.com/api`. To use another deployment, pass `--dart-define=API_BASE_URL=https://YOUR-DOMAIN/api`. Run the Laravel migrations and seed administrator first, then publish courses and register a participant. Administrators and staff use the web portal; mobile login is participant-only.
 
 An Android emulator's host PC is typically reachable at `10.0.2.2`, but release builds use HTTPS. For a physical phone, deploy the API or use a reachable development HTTPS endpoint. Never enable broad cleartext traffic in a production release.
 
 ## Build
 
 ```powershell
-flutter build apk --release --dart-define=API_BASE_URL=https://cms.kemmytech.com/api
-flutter build appbundle --release --dart-define=API_BASE_URL=https://cms.kemmytech.com/api
+flutter build apk --release --dart-define=API_BASE_URL=https://www.lwotowone.com/api
+flutter build appbundle --release --dart-define=API_BASE_URL=https://www.lwotowone.com/api
 ```
 
 Before distribution, review the included green-and-gold L lettermark or replace it with your approved brand icon, configure Android release signing (the generated project initially uses debug signing), review the application ID `ug.co.lwotowone.lwotowone_mobile`, and configure store metadata. For iOS, use macOS, CocoaPods and Xcode, choose your team and provisioning, then run `flutter build ipa` with the same API define. Review iOS bundle identifier and secure-storage keychain entitlements for your signing configuration.
