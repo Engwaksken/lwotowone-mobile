@@ -18,7 +18,8 @@ class CourseProgress {
     final lessons =
         rows('lessons').where((l) => same(l['course_id'], courseId)).toList()
           ..sort(
-            (a, b) => (a['position'] as num).compareTo(b['position'] as num),
+            (a, b) => ((a['sort_order'] ?? a['position'] ?? 0) as num)
+                .compareTo((b['sort_order'] ?? b['position'] ?? 0) as num),
           );
     final completed = rows(
       'lesson_progress',

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'api_config.dart';
 
@@ -9,7 +10,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
-import 'package:video_compress/video_compress.dart';
 
 class ApiFailure implements Exception {
   final String message;
@@ -246,26 +246,10 @@ class Repository extends ChangeNotifier {
       }
       data = await request('GET', '/snapshot');
       await _save('snapshot', data);
-      var contentDownloadFailures = 0;
-      for (final type in ['lessons', 'resources']) {
-        for (final item in rows(type)) {
-          final url = item['download_url']?.toString();
-          if (item['locked'] == true || url == null || url.isEmpty) continue;
-          // Video downloads are large and should only happen when the learner
-          // explicitly saves one for offline use.
-          if (item['media_type'] == 'video') continue;
-          try {
-            await _cacheLearningFile(type, item['id'].toString(), url);
-          } catch (_) {
-            contentDownloadFailures++;
-          }
-        }
-      }
+      await _removeFilesWithoutApproval();
       online = true;
-      message = contentDownloadFailures > 0
-          ? 'Synced, but $contentDownloadFailures learning file(s) could not be downloaded. Retry while connected.'
-          : pending.isEmpty
-          ? 'Synchronised successfully. Authorized lessons and resources are ready offline.'
+      message = pending.isEmpty
+          ? 'Synchronised successfully.'
           : 'Some pending work needs your attention.';
     } on ApiFailure catch (e) {
       online = false;
@@ -389,200 +373,295 @@ class Repository extends ChangeNotifier {
     await sync();
   }
 
-  Future<File> downloadResource(int id) async {
-    final cached = await cachedLearningFile('resources', id.toString());
-    if (cached != null) return cached;
-    final file = await _cacheLearningFile(
-      'resources',
-      id.toString(),
-      '$baseUrl/resources/$id/download',
-    );
-    return file;
+  Map<String, String> get authHeaders => {
+    if (token != null) 'Authorization': 'Bearer $token',
+  };
+
+  /// Download requests keep only these states' files on the phone. Pending,
+  /// rejected and withdrawn requests never leave a copy behind.
+  static const keepSavedStates = {'approved', 'used_up', 'expired'};
+
+  Map<String, dynamic>? downloadRequestFor(String type, Object? id) {
+    for (final row in rows('download_requests')) {
+      if (row['item_type'] == type && '${row['item_id']}' == '$id') return row;
+    }
+    return null;
   }
 
-  Future<File?> cachedLearningFile(String type, String id) async {
-    if (!hasCachedLearningFile(type, id)) return null;
-    final target = File('${directory!.path}/account_${owner}_${type}_$id');
+  Map<String, dynamic>? enrollmentRequestFor(Object? courseId) {
+    for (final row in rows('enrollment_requests')) {
+      if ('${row['course_id']}' == '$courseId') return row;
+    }
+    return null;
+  }
+
+  Future<void> requestEnrollment(Object? courseId, String? message) async {
+    await request('POST', '/enrollment-requests', {
+      'course_id': courseId,
+      if (message != null && message.isNotEmpty) 'message': message,
+    });
+    await sync();
+  }
+
+  Future<void> requestDownload(String type, Object? id, String? message) async {
+    await request('POST', '/download-requests', {
+      'item_type': type,
+      'item_id': id,
+      if (message != null && message.isNotEmpty) 'message': message,
+    });
+    await sync();
+  }
+
+  /// Reads a protected learning file into memory for the in-app viewers.
+  /// Nothing is written to the device.
+  Future<Uint8List> fetchBytes(
+    String url, {
+    int maxBytes = 80 * 1024 * 1024,
+  }) async {
+    final problem = ApiConfig.validate(baseUrl);
+    if (problem != null) throw ApiFailure(problem, 0);
+    final uri = _validatedLearningUri(url);
+    http.StreamedResponse response;
+    try {
+      response = await client
+          .send(http.Request('GET', uri)..headers.addAll(authHeaders))
+          .timeout(const Duration(seconds: 45));
+    } on SocketException {
+      throw ApiFailure(
+        'No connection. Connect to the internet to open this content.',
+        0,
+      );
+    } on TimeoutException {
+      throw ApiFailure('The content took too long to load. Try again.', 0);
+    } on http.ClientException {
+      throw ApiFailure('Could not connect. Check your internet connection.', 0);
+    }
+    if (response.statusCode != 200) {
+      throw ApiFailure(
+        response.statusCode == 403
+            ? 'This content is locked. Finish the earlier lessons or check your course access.'
+            : 'Could not load this content.',
+        response.statusCode,
+      );
+    }
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in response.stream) {
+      builder.add(chunk);
+      if (builder.length > maxBytes) {
+        throw ApiFailure('This file is too large to open in the app.', 0);
+      }
+    }
+    return builder.takeBytes();
+  }
+
+  File _savedTarget(String type, String id) =>
+      File('${directory!.path}/account_${owner}_${type}_$id');
+
+  bool hasSavedFile(String type, Object? id) {
+    if (directory == null || owner == null) return false;
+    final target = _savedTarget(type, '$id');
+    final meta = File('${target.path}.name');
+    if (!meta.existsSync()) return false;
+    return File('${target.path}_${meta.readAsStringSync()}').existsSync();
+  }
+
+  Future<File?> savedFile(String type, Object? id) async {
+    if (!hasSavedFile(type, id)) return null;
+    final target = _savedTarget(type, '$id');
     final meta = File('${target.path}.name');
     return File('${target.path}_${await meta.readAsString()}');
   }
 
-  Future<int?> cachedLearningFileSize(String type, String id) async {
-    final file = await cachedLearningFile(type, id);
-    return file?.length();
-  }
-
-  Future<void> removeCachedLearningFile(String type, String id) async {
+  Future<void> removeSavedFile(String type, Object? id) async {
     if (directory == null || owner == null) return;
-    final target = File('${directory!.path}/account_${owner}_${type}_$id');
+    final target = _savedTarget(type, '$id');
     final meta = File('${target.path}.name');
     if (await meta.exists()) {
-      final name = await meta.readAsString();
-      final content = File('${target.path}_$name');
+      final content = File('${target.path}_${await meta.readAsString()}');
       if (await content.exists()) await content.delete();
       await meta.delete();
     }
     notifyListeners();
   }
 
-  Future<File> saveLessonVideoOffline(
-    String id,
-    String url, {
-    void Function(double progress)? onDownloadProgress,
-    VoidCallback? onCompressionStart,
+  /// Everything saved through approved downloads, for the Profile tab.
+  Future<List<SavedFile>> savedFiles() async {
+    if (directory == null || owner == null) return [];
+    final prefix = 'account_${owner}_';
+    final found = <SavedFile>[];
+    for (final entry in directory!.listSync()) {
+      final name = entry.uri.pathSegments.last;
+      if (entry is! File ||
+          !name.startsWith(prefix) ||
+          !name.endsWith('.name')) {
+        continue;
+      }
+      final match = RegExp(
+        r'^(lessons|resources|attachments)_(\d+)\.name$',
+      ).firstMatch(name.substring(prefix.length));
+      if (match == null) continue;
+      final file = await savedFile(match.group(1)!, match.group(2));
+      if (file != null) {
+        found.add(
+          SavedFile(
+            match.group(1)!,
+            match.group(2)!,
+            file,
+            await file.length(),
+          ),
+        );
+      }
+    }
+    return found;
+  }
+
+  /// Saves an approved lesson or resource file inside the app. Each save uses
+  /// one of the approval's downloads, so a saved file is never fetched again.
+  Future<File> saveApprovedDownload(
+    String type,
+    Object? id, {
+    void Function(double progress)? onProgress,
+  }) async {
+    final approval = downloadRequestFor(type, id);
+    final url = approval?['download_url']?.toString();
+    if (approval == null || approval['state'] != 'approved' || url == null) {
+      throw ApiFailure(
+        'This download has not been approved. Send a request first.',
+        403,
+      );
+    }
+    final existing = await savedFile(type, id);
+    if (existing != null) return existing;
+    final file = await _saveFrom(url, type, '$id', onProgress: onProgress);
+    await sync();
+    return file;
+  }
+
+  /// A lesson's attached files come with the lesson's approval and do not use a download.
+  Future<File> saveApprovedAttachment(
+    Object? lessonId,
+    Object? attachmentId, {
+    void Function(double progress)? onProgress,
+  }) async {
+    final approval = downloadRequestFor('lessons', lessonId);
+    final url = approval?['download_url']?.toString();
+    if (approval == null || approval['state'] != 'approved' || url == null) {
+      throw ApiFailure(
+        'Request a download of this lesson to save its files.',
+        403,
+      );
+    }
+    final existing = await savedFile('attachments', attachmentId);
+    if (existing != null) return existing;
+    return _saveFrom(
+      '$url/attachments/$attachmentId',
+      'attachments',
+      '$attachmentId',
+      onProgress: onProgress,
+    );
+  }
+
+  Future<File> _saveFrom(
+    String url,
+    String type,
+    String id, {
+    void Function(double progress)? onProgress,
   }) async {
     if (directory == null || owner == null) {
-      throw ApiFailure('Sign in before saving videos for offline use.', 0);
+      throw ApiFailure('Sign in before saving learning files.', 0);
     }
-    final cached = await cachedLearningFile('lessons', id);
-    if (cached != null) return cached;
     final problem = ApiConfig.validate(baseUrl);
     if (problem != null) throw ApiFailure(problem, 0);
     final uri = _validatedLearningUri(url);
-    final request = http.Request('GET', uri)
-      ..headers.addAll({
-        'Accept': 'application/octet-stream',
-        'Authorization': 'Bearer $token',
-      });
-    final response = await client
-        .send(request)
-        .timeout(const Duration(seconds: 45));
+    http.StreamedResponse response;
+    try {
+      response = await client
+          .send(
+            http.Request('GET', uri)
+              ..headers.addAll({
+                ...authHeaders,
+                'Accept': 'application/octet-stream',
+              }),
+          )
+          .timeout(const Duration(seconds: 45));
+    } on SocketException {
+      throw ApiFailure(
+        'No connection. Connect to the internet to save this file.',
+        0,
+      );
+    } on TimeoutException {
+      throw ApiFailure('The download took too long to start. Try again.', 0);
+    } on http.ClientException {
+      throw ApiFailure('Could not connect. Check your internet connection.', 0);
+    }
     if (response.statusCode != 200) {
       throw ApiFailure(
-        'Video download failed. Check course access and connection.',
+        'This download is no longer available. Send a new request.',
         response.statusCode,
-      );
-    }
-    const maxVideoBytes = 100 * 1024 * 1024;
-    if (response.contentLength != null &&
-        response.contentLength! > maxVideoBytes) {
-      throw ApiFailure(
-        'This video is larger than the 100 MB download limit.',
-        0,
       );
     }
     final disposition = response.headers['content-disposition'] ?? '';
     final match = RegExp(r'filename="?([^";]+)').firstMatch(disposition);
-    final rawName = match?.group(1) ?? uri.pathSegments.last;
-    final extension =
-        RegExp(
-          r'\.(mp4|webm|ogg)$',
-          caseSensitive: false,
-        ).firstMatch(rawName)?.group(1)?.toLowerCase() ??
-        'mp4';
-    final source = File(
-      '${directory!.path}/account_${owner}_lesson_video_$id.$extension',
+    final name = (match?.group(1) ?? '$type-$id.bin').replaceAll(
+      RegExp(r'[^a-zA-Z0-9._-]'),
+      '_',
     );
-    if (response.contentLength == null) onDownloadProgress?.call(-1);
-    final sink = source.openWrite();
+    final target = _savedTarget(type, id);
+    final partial = File('${target.path}.part');
+    final sink = partial.openWrite();
     var received = 0;
     try {
       await for (final chunk in response.stream) {
         received += chunk.length;
-        if (received > maxVideoBytes) {
-          throw ApiFailure(
-            'This video is larger than the 100 MB download limit.',
-            0,
-          );
-        }
         sink.add(chunk);
         final length = response.contentLength;
-        if (length != null && length > 0) {
-          onDownloadProgress?.call((received / length).clamp(0, 1).toDouble());
-        }
+        onProgress?.call(
+          length != null && length > 0
+              ? (received / length).clamp(0, 1).toDouble()
+              : -1,
+        );
       }
-      await sink.flush();
+      await sink.close();
     } catch (_) {
       await sink.close();
-      if (await source.exists()) await source.delete();
-      rethrow;
-    }
-    await sink.close();
-    if (received == 0) {
-      await source.delete();
-      throw ApiFailure('The video file was empty.', 0);
-    }
-
-    onCompressionStart?.call();
-    File chosen = source;
-    try {
-      final compressed = await VideoCompress.compressVideo(
-        source.path,
-        quality: VideoQuality.Res960x540Quality,
-        deleteOrigin: false,
-      );
-      final output = compressed?.file;
-      if (output != null &&
-          await output.exists() &&
-          await output.length() < await source.length()) {
-        chosen = output;
-      }
-    } catch (_) {
-      // Preserve access to the original if a device codec cannot transcode it.
-    }
-
-    final filename = chosen == source
-        ? 'lesson-$id.$extension'
-        : 'lesson-$id-offline.mp4';
-    final target = File('${directory!.path}/account_${owner}_lessons_$id');
-    final meta = File('${target.path}.name');
-    final saved = File('${target.path}_$filename');
-    try {
-      await chosen.copy(saved.path);
-      await meta.writeAsString(filename, flush: true);
-      onDownloadProgress?.call(1);
-      notifyListeners();
-      return saved;
-    } catch (_) {
-      if (await saved.exists()) await saved.delete();
-      rethrow;
-    } finally {
-      if (await source.exists()) await source.delete();
-      if (chosen != source && await chosen.exists()) await chosen.delete();
-    }
-  }
-
-  bool hasCachedLearningFile(String type, String id) {
-    if (directory == null || owner == null) return false;
-    final target = File('${directory!.path}/account_${owner}_${type}_$id');
-    final meta = File('${target.path}.name');
-    if (!meta.existsSync()) return false;
-    return File('${target.path}_${meta.readAsStringSync()}').existsSync();
-  }
-
-  Future<File> _cacheLearningFile(String type, String id, String url) async {
-    final problem = ApiConfig.validate(baseUrl);
-    if (problem != null) throw ApiFailure(problem, 0);
-    final cached = await cachedLearningFile(type, id);
-    if (cached != null) return cached;
-    final uri = _validatedLearningUri(url);
-    final response = await client
-        .get(
-          uri,
-          headers: {
-            'Accept': 'application/octet-stream',
-            'Authorization': 'Bearer $token',
-          },
-        )
-        .timeout(const Duration(seconds: 45));
-    if (response.statusCode != 200) {
+      if (await partial.exists()) await partial.delete();
       throw ApiFailure(
-        'Learning file download failed. Check course access and connection.',
-        response.statusCode,
+        'The download was interrupted. Try again while connected.',
+        0,
       );
     }
-    final disposition = response.headers['content-disposition'] ?? '';
-    final match = RegExp(r'filename="?([^";]+)').firstMatch(disposition);
-    final uriName = uri.pathSegments.isEmpty ? '' : uri.pathSegments.last;
-    final name =
-        (match?.group(1) ?? (uriName.contains('.') ? uriName : '$type-$id.bin'))
-            .replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-    final target = File('${directory!.path}/account_${owner}_${type}_$id');
-    final meta = File('${target.path}.name');
-    final file = File('${target.path}_$name');
-    await file.writeAsBytes(response.bodyBytes, flush: true);
-    await meta.writeAsString(name, flush: true);
-    return file;
+    if (received == 0) {
+      await partial.delete();
+      throw ApiFailure('The downloaded file was empty.', 0);
+    }
+    final saved = await partial.rename('${target.path}_$name');
+    await File('${target.path}.name').writeAsString(name, flush: true);
+    onProgress?.call(1);
+    notifyListeners();
+    return saved;
+  }
+
+  /// Removes files the learner is no longer approved to keep: withdrawn or
+  /// rejected approvals, content they lost access to, and files that older
+  /// versions of the app saved automatically.
+  Future<void> _removeFilesWithoutApproval() async {
+    bool approved(String type, Object? id) =>
+        keepSavedStates.contains(downloadRequestFor(type, id)?['state']) &&
+        rows(
+          type,
+        ).any((row) => '${row['id']}' == '$id' && row['locked'] != true);
+    final keptAttachments = <String>{
+      for (final lesson in rows('lessons'))
+        if (approved('lessons', lesson['id']))
+          for (final file in lesson['attachments'] as List? ?? const [])
+            if (file is Map) '${file['id']}',
+    };
+    for (final saved in await savedFiles()) {
+      final keep = saved.type == 'attachments'
+          ? keptAttachments.contains(saved.id)
+          : approved(saved.type, saved.id);
+      if (!keep) await removeSavedFile(saved.type, saved.id);
+    }
   }
 
   Uri _validatedLearningUri(String url) {
@@ -635,4 +714,13 @@ class Repository extends ChangeNotifier {
     client.close();
     super.dispose();
   }
+}
+
+/// A learning file saved on this phone through an approved download.
+class SavedFile {
+  final String type;
+  final String id;
+  final File file;
+  final int size;
+  const SavedFile(this.type, this.id, this.file, this.size);
 }

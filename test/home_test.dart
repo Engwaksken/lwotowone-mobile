@@ -1,143 +1,205 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lwotowone_mobile/services/repository.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:lwotowone_mobile/screens/activities.dart';
 import 'package:lwotowone_mobile/screens/home.dart';
+import 'package:lwotowone_mobile/services/repository.dart';
+
+void phone(WidgetTester tester) {
+  tester.view.physicalSize = const Size(390, 844);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
+Map<String, dynamic> account() => {
+  'user': {
+    'id': 1,
+    'name': 'Akello Grace',
+    'email': 'learner@example.test',
+    'profile_complete': true,
+  },
+  'courses': [
+    {
+      'id': 1,
+      'title': 'Poultry basics',
+      'level': 'Beginner',
+      'duration_hours': 4,
+      'summary': 'Learn poultry care',
+    },
+    {
+      'id': 2,
+      'title': 'Crop farming',
+      'level': 'Beginner',
+      'duration_hours': 5,
+      'summary': 'Learn crop production',
+    },
+  ],
+  'enrolments': [
+    {'course_id': 1},
+  ],
+  'lessons': [
+    {
+      'id': 10,
+      'course_id': 1,
+      'title': 'Housing',
+      'position': 1,
+      'sort_order': 0,
+      'locked': false,
+    },
+    {
+      'id': 11,
+      'course_id': 1,
+      'title': 'Feeding',
+      'position': 2,
+      'sort_order': 1,
+      'locked': true,
+    },
+  ],
+  'lesson_progress': [
+    {'lesson_id': 10},
+  ],
+  'enrollment_requests': [],
+  'download_requests': [],
+};
 
 void main() {
-  testWidgets('Dashboard uses two stats per row and sections use three', (
+  testWidgets('Five tabs open on a phone without layout errors', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
+    phone(tester);
     final repo = Repository(baseUrl: 'https://learning.test/api');
-    repo.data = {
-      'user': {'id': 1, 'name': 'Learner'},
-    };
+    repo.data = account();
     await tester.pumpWidget(MaterialApp(home: Home(repo: repo)));
     await tester.pumpAndSettle();
 
-    final first = tester.getTopLeft(find.text('Courses'));
-    final second = tester.getTopLeft(find.text('Lessons done'));
-    final third = tester.getTopLeft(find.text('My enterprises'));
-    final fourth = tester.getTopLeft(find.text('Pending sync'));
-    expect(second.dy, first.dy);
-    expect(third.dy, greaterThan(first.dy));
-    expect(fourth.dy, third.dy);
-
-    await tester.tap(find.byTooltip('Open navigation menu'));
-    await tester.pumpAndSettle();
-    final learn = find.descendant(
-      of: find.byType(Drawer),
-      matching: find.text('Learn'),
+    expect(find.text('Akello'), findsOneWidget);
+    expect(find.text('CONTINUE LEARNING'), findsOneWidget);
+    expect(find.text('Poultry basics'), findsOneWidget);
+    expect(find.text('1 of 2 lessons · 50%'), findsOneWidget);
+    // Stat tiles sit two per row on a phone.
+    expect(
+      tester.getTopLeft(find.text('Lessons done')).dy,
+      tester.getTopLeft(find.text('My courses')).dy,
     );
-    await tester.tap(learn);
-    await tester.pumpAndSettle();
-    final available = tester.getTopLeft(find.text('Available courses'));
-    expect(tester.getTopLeft(find.text('My courses')).dy, available.dy);
-    expect(tester.getTopLeft(find.text('Lessons done')).dy, available.dy);
-    expect(tester.takeException(), isNull);
+    expect(
+      tester.getTopLeft(find.text('Certificates')).dy,
+      greaterThan(tester.getTopLeft(find.text('My courses')).dy),
+    );
+
+    for (final (label, title) in [
+      ('Courses', 'My courses'),
+      ('Activities', 'Activities'),
+      ('Inbox', 'Inbox'),
+      ('Profile', 'Profile'),
+    ]) {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: find.byType(AppBar), matching: find.text(title)),
+        findsOneWidget,
+        reason: label,
+      );
+      expect(tester.takeException(), isNull, reason: label);
+    }
     repo.dispose();
   });
 
-  testWidgets('Search opens from the toolbar icon and filters the section', (
-    tester,
-  ) async {
+  testWidgets('Every activity opens with an empty account', (tester) async {
+    phone(tester);
     final repo = Repository(baseUrl: 'https://learning.test/api');
     repo.data = {
-      'user': {'id': 1, 'name': 'Learner'},
-      'courses': [
-        {
-          'id': 1,
-          'title': 'Poultry basics',
-          'level': 'Beginner',
-          'duration_hours': 4,
-          'summary': 'Learn poultry care',
-        },
-        {
-          'id': 2,
-          'title': 'Crop farming',
-          'level': 'Beginner',
-          'duration_hours': 5,
-          'summary': 'Learn crop production',
-        },
-      ],
-      'enrolments': [],
-      'lesson_progress': [],
+      'user': {'id': 1, 'name': 'Learner', 'profile_complete': true},
     };
     await tester.pumpWidget(MaterialApp(home: Home(repo: repo)));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Learn').last);
+    await tester.tap(find.text('Activities').last);
+    await tester.pumpAndSettle();
+    for (final section in activitySections.keys.where(
+      (s) => s != 'Knowledge game',
+    )) {
+      await tester.scrollUntilVisible(
+        find.text(section).last,
+        100,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.text(section).last);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: find.byType(AppBar), matching: find.text(section)),
+        findsOneWidget,
+        reason: section,
+      );
+      expect(tester.takeException(), isNull, reason: section);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+    }
+    repo.dispose();
+  });
+
+  testWidgets('Learners search courses and ask to join another course', (
+    tester,
+  ) async {
+    phone(tester);
+    final posted = <Map<String, dynamic>>[];
+    final repo = Repository(
+      baseUrl: 'https://learning.test/api',
+      client: MockClient((request) async {
+        if (request.url.path == '/api/enrollment-requests') {
+          posted.add(
+            Map<String, dynamic>.from(jsonDecode(request.body) as Map),
+          );
+          return http.Response(jsonEncode({'message': 'sent'}), 201);
+        }
+        final data = account();
+        data['enrollment_requests'] = [
+          for (final row in posted)
+            {
+              'course_id': row['course_id'],
+              'status': 'pending',
+              'message': row['message'],
+            },
+        ];
+        return http.Response(jsonEncode(data), 200);
+      }),
+    );
+    repo.data = account();
+    repo.token = 'token';
+    await tester.pumpWidget(MaterialApp(home: Home(repo: repo)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Courses').last);
     await tester.pumpAndSettle();
 
-    expect(find.byType(TextField), findsNothing);
-    await tester.tap(find.byTooltip('Search'));
-    await tester.pumpAndSettle();
-    expect(find.byType(TextField), findsOneWidget);
-    await tester.enterText(find.byType(TextField), 'poultry');
-    await tester.pumpAndSettle();
     expect(find.text('Poultry basics'), findsOneWidget);
     expect(find.text('Crop farming'), findsNothing);
-
-    await tester.tap(find.byTooltip('Close search'));
+    await tester.tap(find.text('Browse'));
     await tester.pumpAndSettle();
-    expect(find.byType(TextField), findsNothing);
     expect(find.text('Crop farming'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'poultry');
+    await tester.pumpAndSettle();
+    expect(find.text('Crop farming'), findsNothing);
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Request to join'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'I keep goats too');
+    await tester.tap(find.text('Send request'));
+    await tester.pumpAndSettle();
+
+    expect(posted, [
+      {'course_id': 2, 'message': 'I keep goats too'},
+    ]);
+    expect(find.text('Request pending · waiting for review'), findsOneWidget);
     expect(tester.takeException(), isNull);
     repo.dispose();
   });
-
-  testWidgets(
-    'Every participant section renders with an empty downloaded account',
-    (tester) async {
-      final repo = Repository(baseUrl: 'https://learning.test/api');
-      repo.data = {
-        'user': {'id': 1, 'name': 'Learner', 'email': 'learner@example.test'},
-      };
-      await tester.pumpWidget(MaterialApp(home: Home(repo: repo)));
-      await tester.pumpAndSettle();
-      for (final section in [
-        'Learn',
-        'Practice',
-        'Mentorship',
-        'Opportunities',
-        'Enterprise',
-        'Events',
-        'Notifications',
-        'Pending',
-        'Profile',
-      ]) {
-        await tester.tap(find.byTooltip('Open navigation menu'));
-        await tester.pumpAndSettle();
-        final link = find.descendant(
-          of: find.byType(Drawer),
-          matching: find.text(section == 'Pending' ? 'Pending (0)' : section),
-        );
-        await tester.scrollUntilVisible(
-          link,
-          120,
-          scrollable: find.descendant(
-            of: find.byType(Drawer),
-            matching: find.byType(Scrollable),
-          ),
-        );
-        await Scrollable.ensureVisible(tester.element(link), alignment: 0.5);
-        await tester.pumpAndSettle();
-        await tester.tap(link);
-        await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull, reason: section);
-        expect(
-          find.descendant(
-            of: find.byType(AppBar),
-            matching: find.text(section),
-          ),
-          findsOneWidget,
-          reason: section,
-        );
-      }
-      repo.dispose();
-    },
-  );
 }
