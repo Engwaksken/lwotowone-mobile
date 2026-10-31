@@ -144,10 +144,11 @@ class _KnowledgeGameScreenState extends State<KnowledgeGameScreen> {
     }
   }
 
-  String topicTitle(String id) => topics
-      .where((topic) => topic['id'] == id)
-      .map((topic) => topic['title'].toString())
-      .firstOrNull ??
+  String topicTitle(String id) =>
+      topics
+          .where((topic) => topic['id'] == id)
+          .map((topic) => topic['title'].toString())
+          .firstOrNull ??
       (id == 'poultry' ? 'Poultry' : 'Farming');
 
   @override
@@ -242,7 +243,9 @@ class _KnowledgeGameScreenState extends State<KnowledgeGameScreen> {
                           topic['title'].toString(),
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
-                        Text('${topic['question_count']} questions in the bank'),
+                        Text(
+                          '${topic['question_count']} questions in the bank',
+                        ),
                       ],
                     ),
                   ),
@@ -321,9 +324,9 @@ class _KnowledgeGameScreenState extends State<KnowledgeGameScreen> {
         const SizedBox(height: 20),
         Text(
           question['question'].toString(),
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 12),
         for (final entry in options.entries)

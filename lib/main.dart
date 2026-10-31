@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'services/repository.dart';
 import 'screens/login.dart';
 import 'screens/home.dart';
+import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,14 +18,7 @@ class LwotowoneApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     title: 'Lwotowone',
     debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff175742)),
-      useMaterial3: true,
-      scaffoldBackgroundColor: const Color(0xfff6f8f3),
-      inputDecorationTheme: const InputDecorationTheme(
-        border: OutlineInputBorder(),
-      ),
-    ),
+    theme: buildTheme(),
     home: AnimatedBuilder(
       animation: repo,
       builder: (context, _) =>

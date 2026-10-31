@@ -19,6 +19,7 @@ class _LoginState extends State<Login> {
       phone = TextEditingController(),
       district = TextEditingController();
   bool register = false, busy = false, hidden = true, consent = false;
+  String language = 'en';
   String? error, successMessage;
   final read = {'terms': false, 'privacy': false};
   Map<String, Map<String, String>>? policyDocs;
@@ -89,6 +90,7 @@ class _LoginState extends State<Login> {
           'name': name.text.trim(),
           'phone': phone.text.trim(),
           'district': district.text.trim(),
+          'preferred_language': language,
           'password_confirmation': confirm.text,
           'consent': 1,
           'terms_read': 1,
@@ -214,6 +216,21 @@ class _LoginState extends State<Login> {
                   field(phone, 'Phone (optional)', required: false),
                   const SizedBox(height: 14),
                   field(district, 'District (optional)', required: false),
+                  const SizedBox(height: 14),
+                  DropdownButtonFormField<String>(
+                    initialValue: language,
+                    decoration: const InputDecoration(
+                      labelText: 'Learning language',
+                      helperText:
+                          'You see lessons and course content in this language.',
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'en', child: Text('English')),
+                      DropdownMenuItem(value: 'lg', child: Text('Luganda')),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => language = value ?? 'en'),
+                  ),
                   const SizedBox(height: 18),
                   Text(
                     'Before you create your account, read both documents to the end.',

@@ -4,7 +4,15 @@ Separate Android/iOS source project connected to the Laravel CMS and learning AP
 
 ## Screens and functions
 
-Participant login/registration, overview, searchable course catalogue, enrolment, downloaded lessons, protected resource downloads, written assignment submissions, practical activity logs, mentor profiles and booking requests, opportunities/applications, enterprise plans, income/expense records, events, email/in-app notice inbox, profile and pending synchronisation screen.
+The app uses a five-tab institute layout:
+
+- **Home**: greeting, "Continue learning" card with progress, course/lesson/certificate counts, and a "For you" list (approved downloads, pending requests, unsent work, event registrations, announcements).
+- **Courses**: *My courses* with progress, and *Browse* to send an enrollment request for another course (admins approve or reject on the website).
+- **Activities**: practical logs, mentorship, opportunities, enterprise and earnings, events and the knowledge game.
+- **Inbox**: notices from the institute, and work waiting to synchronise.
+- **Profile**: learner profile, learning language, course and download requests, files saved in the app, sign out.
+
+Lessons open on their own page with in-app video/audio playback, an in-app PDF reader, images and text. Learners only see content in the learning language chosen at sign-up (English or Luganda).
 
 ## Run on Windows / Android
 
@@ -30,22 +38,23 @@ flutter build appbundle --release --dart-define=API_BASE_URL=https://cms.kemmyte
 
 Before distribution, review the included green-and-gold L lettermark or replace it with your approved brand icon, configure Android release signing (the generated project initially uses debug signing), review the application ID `ug.co.lwotowone.lwotowone_mobile`, and configure store metadata. For iOS, use macOS, CocoaPods and Xcode, choose your team and provisioning, then run `flutter build ipa` with the same API define. Review iOS bundle identifier and secure-storage keychain entitlements for your signing configuration.
 
-## Offline behaviour
+## Offline behaviour and downloads
 
-- First sign-in and enrolment need internet.
-- Synchronise from the toolbar or pull to refresh. Opening the main screen also requests a sync.
+- First sign-in, enrollment requests and download requests need internet.
+- Synchronise from the toolbar or pull to refresh. Opening the app also requests a sync.
 - Course lesson text and account records persist in app-private storage. Tokens use OS secure storage.
-- Documents and non-video lesson files synchronize for offline use. Video files are opt-in: tap **Download compressed video for offline** in a lesson to download and compress it to up to 540p. Videos over 100 MB are refused; removable downloads show their storage size. Streaming/external video links still require internet.
+- Videos, audio, PDFs and images play inside the app, streamed from the server with the learner's sign-in. Nothing is saved automatically and files are never handed to other apps.
+- To keep a lesson or resource for offline use, the learner taps **Request download**. When an admin approves it on the website, **Save in the app** appears; an approval allows 3 downloads within 7 days. A lesson's approval also covers its attached files. Saved copies open only inside the app and are listed under Profile → Saved in the app.
+- Saved copies stay after the approval runs out, but are removed on the next sync if an admin withdraws the approval or the learner loses access to the content. Files saved automatically by earlier app versions are removed on the first sync.
 - Lesson completion, written assignments, practical logs and income/expense records can be queued offline.
 - The queue persists across app restarts. UUIDs prevent server duplication after retry.
-- A validation failure remains in Pending with the server's message. Retry or discard it; to change the contents, discard the failed item and submit a corrected one.
-- Enrolment, mentor bookings, applications, new enterprises, event registrations and profile changes need an online server response.
-- A pending action counts as saved locally until the server accepts it. The main dashboard reflects the last server snapshot rather than speculative totals.
-- Sign out requires internet to revoke the token, clears account cache/resources and blocks while unsent work exists. Synchronise or individually discard pending work first.
+- A validation failure stays in Inbox → Waiting to sync with the server's message. Retry or discard it; to change the contents, discard the failed item and submit a corrected one.
+- Mentor bookings, applications, new enterprises, event registrations and profile changes need an online server response.
+- Sign out requires internet to revoke the token, clears the account's records and saved files, and blocks while unsent work exists.
 - Expired tokens return to sign-in while retaining pending work for the same account. Signing into another account does not load the previous account's cache.
-- Text/records are refreshed in a full snapshot; videos are not preloaded. The app has no automatic background sync and no device push integration.
+- The app has no automatic background sync.
 
-Email notices are sent by the Laravel queue; mobile sees database notices on the next sync. The app does not deliver remote notifications while a device has no connectivity. Financial records are self-entered and do not process payments.
+The matching Laravel API must include the enrollment request, download request and `/api/downloads/{id}` endpoints; run `php artisan migrate --force` on the server before releasing this app version.
 
 ## Learner profile photos
 
@@ -53,14 +62,16 @@ From **Profile → Edit learner profile**, choose **Add or change photo** to sel
 
 ## Source map
 
-- `lib/services/repository.dart`: API, token storage, snapshot persistence, offline queue, resource downloads.
-- `lib/screens/login.dart`: participant sign-in, registration, terms and password reset link.
-- `lib/screens/home.dart`: dashboard and participant module screens.
-- `lib/screens/course.dart`: lessons, resources, submissions and web certificate link.
+- `lib/theme.dart`: brand colours and app theme.
+- `lib/services/repository.dart`: API, token storage, snapshot persistence, offline queue, requests, streaming and approved downloads.
+- `lib/screens/login.dart`: participant sign-in, registration (including learning language), terms and password reset link.
+- `lib/screens/home.dart`: the five-tab shell and Home tab.
+- `lib/screens/courses.dart`, `course.dart`, `content.dart`: course catalogue and requests, course page, lesson/resource page.
+- `lib/screens/activities.dart`, `inbox.dart`, `profile_tab.dart`: the other tabs.
+- `lib/widgets/media_view.dart`: in-app video/audio player, PDF reader, image and text viewers.
+- `lib/widgets/download_panel.dart`: download request, approval and saving.
 - `lib/screens/action_form.dart`: validated participant action forms.
-- `test/`: widget and API error-handling tests.
-
-Device acceptance: register, enrol, sync, turn off data, restart the app, read a lesson, queue a log, restore data, sync, verify the server record appears once, submit work, assess it on web, then sync feedback. Also test real resource opening, session expiry, cross-account isolation, low bandwidth and store-signed secure storage. Native Android/iOS builds and physical-device testing require your build environment and release credentials.
+- `test/`: widget, offline and API error-handling tests.
 
 ## Continued development: enterprise editing and APK automation
 
@@ -90,7 +101,3 @@ Event screens display registration history, confirmation before cancellation, an
 ## Account email verification update
 
 Mobile registration now handles the API's email-verification response without expecting an access token. The participant is returned to sign-in with a confirmation message and can sign in after verifying their email. Accounts provisioned by an administrator with a temporary password must first verify the email and change that temporary password on the website before mobile API sign-in is allowed. SMTP delivery and administrator-managed users/settings remain web-portal functions.
-
-## Offline learning content
-
-After payment/course access is confirmed, use **Synchronise** while connected to download authorized lesson text and downloadable lesson/resource files. They are stored per account and can be opened offline; lesson completions and written submissions can remain queued until the next successful sync. Locked content is not cached. Streaming videos and external links still require internet, and logging out removes that account's local cache.

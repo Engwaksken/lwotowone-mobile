@@ -1,507 +1,484 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:open_filex/open_filex.dart';
-import '../services/repository.dart';
-import 'action_form.dart';
-import 'learning_progress.dart';
-import '../services/course_progress.dart';
-import '../services/api_config.dart';
 
-class CourseScreen extends StatefulWidget {
+import '../services/api_config.dart';
+import '../services/course_progress.dart';
+import '../services/repository.dart';
+import '../theme.dart';
+import '../widgets/media_view.dart';
+import '../widgets/ui.dart';
+import 'action_form.dart';
+import 'content.dart';
+
+class CourseScreen extends StatelessWidget {
   final Repository repo;
   final Map<String, dynamic> course;
   const CourseScreen({super.key, required this.repo, required this.course});
 
-  @override
-  State<CourseScreen> createState() => _CourseScreenState();
-}
+  bool same(Object? a, Object? b) => '$a' == '$b';
 
-class _CourseScreenState extends State<CourseScreen> {
-  Repository get repo => widget.repo;
-  Map<String, dynamic> get course => widget.course;
-  final Map<String, double> videoDownloads = {};
-  final Set<String> compressingVideos = {};
+  List<Map<String, dynamic>> lessons() =>
+      repo
+          .rows('lessons')
+          .where((l) => same(l['course_id'], course['id']))
+          .toList()
+        ..sort(
+          (a, b) => ((a['sort_order'] ?? a['position'] ?? 0) as num).compareTo(
+            (b['sort_order'] ?? b['position'] ?? 0) as num,
+          ),
+        );
+
+  Map<String, dynamic> get serverProgress => repo
+      .rows('course_progress')
+      .firstWhere(
+        (p) => same(p['course_id'], course['id']),
+        orElse: () => <String, dynamic>{},
+      );
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: repo,
     builder: (context, _) {
       final progress = CourseProgress.fromData(repo.data, course['id']);
-      final lessons =
-          repo
-              .rows('lessons')
-              .where((l) => l['course_id'] == course['id'])
-              .toList()
-            ..sort(
-              (a, b) => (a['position'] as int).compareTo(b['position'] as int),
-            );
-      return Scaffold(
-        appBar: AppBar(title: Text(course['title'])),
-        body: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            Text(course['summary'] ?? ''),
-            LearningProgressView(progress: progress),
-            const SizedBox(height: 20),
-            Text('Lessons', style: Theme.of(context).textTheme.titleLarge),
-            if (lessons.isEmpty)
-              const Text('No downloaded lessons. Synchronise after enrolment.'),
-            for (final l in lessons)
-              Card(
-                child: ExpansionTile(
-                  key: PageStorageKey('lesson-${l['id']}'),
-                  initiallyExpanded: l['id'] == progress.nextLessonId,
-                  title: Text(
-                    l['title'] + (l['locked'] == true ? ' · Locked' : ''),
-                  ),
-                  leading: Icon(
-                    repo
-                            .rows('lesson_progress')
-                            .any((p) => p['lesson_id'] == l['id'])
-                        ? Icons.check_circle
-                        : Icons.menu_book,
-                  ),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (l['locked'] == true)
-                            const Text(
-                              'Sync after course access is approved and preceding lessons are completed to unlock this lesson.',
-                            )
-                          else ...[
-                            SelectableText(l['body'] ?? ''),
-                            if (l['video_url'] != null)
-                              TextButton(
-                                onPressed: () => launchUrl(
-                                  Uri.parse(l['video_url']),
-                                  mode: LaunchMode.externalApplication,
-                                ),
-                                child: const Text(
-                                  'Watch video (uses internet data)',
-                                ),
-                              ),
-                            if (l['media_type'] == 'video' &&
-                                l['download_url'] != null)
-                              offlineVideoAction(context, l),
-                            if (l['media_type'] == 'video' &&
-                                l['video_url'] != null &&
-                                l['download_url'] == null)
-                              const Padding(
-                                padding: EdgeInsets.only(bottom: 12),
-                                child: Text(
-                                  'This streamed video needs internet. The course has no downloadable offline video file.',
-                                ),
-                              ),
-                            if (l['download_url'] != null &&
-                                l['media_type'] != 'video' &&
-                                repo.hasCachedLearningFile(
-                                  'lessons',
-                                  l['id'].toString(),
-                                ))
-                              TextButton.icon(
-                                onPressed: () => run(context, () async {
-                                  final file = await repo.cachedLearningFile(
-                                    'lessons',
-                                    l['id'].toString(),
-                                  );
-                                  if (file == null) {
-                                    throw ApiFailure(
-                                      'Sync while connected to download this lesson file.',
-                                      0,
-                                    );
-                                  }
-                                  final result = await OpenFilex.open(
-                                    file.path,
-                                  );
-                                  if (result.type != ResultType.done) {
-                                    throw ApiFailure(result.message, 0);
-                                  }
-                                }),
-                                icon: const Icon(Icons.offline_pin),
-                                label: const Text(
-                                  'Open downloaded lesson file',
-                                ),
-                              ),
-                            FilledButton(
-                              onPressed:
-                                  l['locked'] == true ||
-                                      repo.busy ||
-                                      repo
-                                          .rows('lesson_progress')
-                                          .any((p) => p['lesson_id'] == l['id'])
-                                  ? null
-                                  : () => run(
-                                      context,
-                                      () => repo.act('complete', {
-                                        'lesson_id': l['id'],
-                                      }, offlineAllowed: true),
-                                    ),
-                              child: Text(
-                                repo
-                                        .rows('lesson_progress')
-                                        .any((p) => p['lesson_id'] == l['id'])
-                                    ? 'Completed'
-                                    : 'Mark complete',
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
+      final resources = repo
+          .rows('resources')
+          .where((r) => same(r['course_id'], course['id']))
+          .toList();
+      final assignments = repo
+          .rows('assignments')
+          .where((a) => same(a['course_id'], course['id']))
+          .toList();
+      return DefaultTabController(
+        length: 3,
+        child: Scaffold(
+          body: NestedScrollView(
+            headerSliverBuilder: (context, _) => [
+              SliverAppBar(
+                pinned: true,
+                expandedHeight: 230,
+                foregroundColor: Colors.white,
+                backgroundColor: Brand.greenDark,
+                title: Text(
+                  '${course['title']}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                flexibleSpace: FlexibleSpaceBar(
+                  collapseMode: CollapseMode.pin,
+                  background: _CourseHeader(course: course, progress: progress),
+                ),
+                bottom: const TabBar(
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Color(0xffcfe2d7),
+                  indicatorColor: Brand.gold,
+                  tabs: [
+                    Tab(text: 'Lessons'),
+                    Tab(text: 'Resources'),
+                    Tab(text: 'Assignments'),
                   ],
                 ),
               ),
-            const SizedBox(height: 20),
-            Text('Resources', style: Theme.of(context).textTheme.titleLarge),
-            for (final r
-                in repo
-                    .rows('resources')
-                    .where((r) => r['course_id'] == course['id']))
-              ListTile(
-                title: Text(
-                  r['title'] + (r['locked'] == true ? ' · Locked' : ''),
-                ),
-                subtitle: Text(
-                  [
-                    if ((r['description'] ?? '').toString().isNotEmpty)
-                      r['description'].toString(),
-                    if (r['locked'] != true &&
-                        r['download_url'] != null &&
-                        repo.hasCachedLearningFile(
-                          'resources',
-                          r['id'].toString(),
-                        ))
-                      'Downloaded for offline use',
-                    if (r['locked'] != true &&
-                        r['download_url'] != null &&
-                        !repo.hasCachedLearningFile(
-                          'resources',
-                          r['id'].toString(),
-                        ))
-                      'Sync while connected to download for offline use',
-                    if (r['locked'] != true && r['content_url'] != null)
-                      'External content requires an internet connection',
-                  ].join(' · '),
-                ),
-                trailing: Icon(
-                  r['locked'] == true
-                      ? Icons.lock_outline
-                      : repo.hasCachedLearningFile(
-                          'resources',
-                          r['id'].toString(),
-                        )
-                      ? Icons.offline_pin
-                      : Icons.download,
-                ),
-                onTap: r['locked'] == true
-                    ? null
-                    : () => run(context, () async {
-                        final body = r['content_body']?.toString();
-                        if (body != null && body.isNotEmpty) {
-                          await showDialog<void>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: Text(r['title']),
-                              content: SingleChildScrollView(
-                                child: SelectableText(body),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('Close'),
-                                ),
-                              ],
-                            ),
-                          );
-                        } else if (r['content_url'] != null) {
-                          final opened = await launchUrl(
-                            Uri.parse(r['content_url']),
-                            mode: LaunchMode.externalApplication,
-                          );
-                          if (!opened) {
-                            throw ApiFailure(
-                              'Could not open the resource link.',
-                              0,
-                            );
-                          }
-                        } else if (r['download_url'] != null) {
-                          final file = await repo.downloadResource(r['id']);
-                          final result = await OpenFilex.open(file.path);
-                          if (result.type != ResultType.done) {
-                            throw ApiFailure(result.message, 0);
-                          }
-                        }
-                      }),
-              ),
-            const SizedBox(height: 20),
-            Text(
-              'Practical assignments',
-              style: Theme.of(context).textTheme.titleLarge,
+            ],
+            body: TabBarView(
+              children: [
+                _lessonsTab(context, progress),
+                _resourcesTab(context, resources),
+                _assignmentsTab(context, assignments, progress),
+              ],
             ),
-            for (final a
-                in repo
-                    .rows('assignments')
-                    .where((a) => a['course_id'] == course['id']))
-              assignment(context, a),
-            const SizedBox(height: 20),
-            OutlinedButton(
-              onPressed: !progress.certificateReady
-                  ? null
-                  : () => run(context, () async {
-                      final error = ApiConfig.validate(repo.baseUrl);
-                      if (error != null) throw ApiFailure(error, 0);
-                      final opened = await launchUrl(
-                        Uri.parse(
-                          '${repo.baseUrl.replaceFirst(RegExp(r'/api$'), '')}/certificates/${course['id']}',
-                        ),
-                        mode: LaunchMode.externalApplication,
-                      );
-                      if (!opened) {
-                        throw ApiFailure(
-                          'Could not open the certificate page.',
-                          0,
-                        );
-                      }
-                    }),
-              child: const Text(
-                'Completion certificate (web sign-in required)',
-              ),
-            ),
-          ],
+          ),
         ),
       );
     },
   );
-  Widget assignment(BuildContext context, Map<String, dynamic> a) {
-    final matches = repo
-        .rows('submissions')
-        .where((s) => s['assignment_id'] == a['id']);
-    final submission = matches.isEmpty ? null : matches.first;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(a['title'], style: Theme.of(context).textTheme.titleMedium),
-            Text(a['instructions']),
-            Text(
-              'Pass mark: ${a['pass_mark']}% · Due: ${a['due_at'] ?? 'No deadline'}',
+
+  Widget _lessonsTab(BuildContext context, CourseProgress progress) {
+    final items = lessons();
+    final done = {
+      for (final p in repo.rows('lesson_progress')) '${p['lesson_id']}',
+    };
+    final tiles = <Widget>[];
+    Object? module;
+    for (final (index, lesson) in items.indexed) {
+      if (lesson['module_title'] != null && lesson['module_title'] != module) {
+        tiles.add(SectionTitle('${lesson['module_title']}'));
+      }
+      module = lesson['module_title'];
+      tiles.add(
+        _LessonTile(
+          number: index + 1,
+          lesson: lesson,
+          completed: done.contains('${lesson['id']}'),
+          next: same(lesson['id'], progress.nextLessonId),
+          saved: repo.hasSavedFile('lessons', lesson['id']),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ContentScreen(
+                repo: repo,
+                type: 'lessons',
+                id: lesson['id'],
+                subtitle:
+                    'Lesson ${index + 1} of ${items.length}${lesson['module_title'] == null ? '' : ' · ${lesson['module_title']}'}',
+              ),
             ),
-            if (submission != null) ...[
-              Text(
-                'Status: ${submission['status']} · Score: ${submission['score'] ?? 'Awaiting review'}',
+          ),
+        ),
+      );
+    }
+    return PageList(
+      onRefresh: repo.sync,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [
+        if (items.isEmpty)
+          const EmptyState(
+            icon: Icons.menu_book_outlined,
+            title: 'No lessons yet',
+            message:
+                'Lessons in your learning language will appear here once they are published.',
+          ),
+        ...tiles,
+      ],
+    );
+  }
+
+  Widget _resourcesTab(
+    BuildContext context,
+    List<Map<String, dynamic>> resources,
+  ) => PageList(
+    onRefresh: repo.sync,
+    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+    children: [
+      if (resources.isEmpty)
+        const EmptyState(
+          icon: Icons.folder_open_outlined,
+          title: 'No resources yet',
+        ),
+      for (final resource in resources)
+        InfoCard(
+          leading: CircleAvatar(
+            backgroundColor: Brand.greenSoft,
+            child: Icon(
+              resource['locked'] == true
+                  ? Icons.lock_outline
+                  : mediaIcon('${resource['media_type'] ?? 'document'}'),
+              color: Brand.green,
+            ),
+          ),
+          title: '${resource['title']}',
+          body: '${resource['description'] ?? ''}',
+          trailing: repo.hasSavedFile('resources', resource['id'])
+              ? const Icon(
+                  Icons.offline_pin,
+                  color: Brand.green,
+                  semanticLabel: 'Saved in the app',
+                )
+              : const Icon(Icons.chevron_right),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ContentScreen(
+                repo: repo,
+                type: 'resources',
+                id: resource['id'],
               ),
-              Text(submission['feedback'] ?? ''),
-            ],
-            if (submission == null || submission['status'] == 'returned')
-              TextButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ActionForm(
-                      title: 'Submit practical work',
-                      action: 'submit',
-                      repo: repo,
-                      fixed: {'assignment_id': a['id']},
-                      offlineAllowed: true,
-                      fields: const [
-                        FormFieldSpec(
-                          'body',
-                          'Describe your practical work',
-                          multiline: true,
-                        ),
-                      ],
-                    ),
-                  ),
+            ),
+          ),
+        ),
+    ],
+  );
+
+  Widget _assignmentsTab(
+    BuildContext context,
+    List<Map<String, dynamic>> assignments,
+    CourseProgress progress,
+  ) => PageList(
+    onRefresh: repo.sync,
+    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+    children: [
+      if (serverProgress['awaiting_assessments'] == true)
+        const NoticeCard(
+          icon: Icons.hourglass_top,
+          warning: true,
+          text:
+              'Practical assignments in your learning language are being prepared. You can finish the course once they are published.',
+        ),
+      if (assignments.isEmpty && serverProgress['awaiting_assessments'] != true)
+        const EmptyState(
+          icon: Icons.assignment_outlined,
+          title: 'No practical assignments',
+        ),
+      for (final assignment in assignments)
+        _AssignmentCard(repo: repo, assignment: assignment),
+      const SizedBox(height: 12),
+      _CertificateCard(
+        repo: repo,
+        course: course,
+        ready: progress.certificateReady,
+      ),
+    ],
+  );
+}
+
+class _CourseHeader extends StatelessWidget {
+  final Map<String, dynamic> course;
+  final CourseProgress progress;
+  const _CourseHeader({required this.course, required this.progress});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: const BoxDecoration(gradient: Brand.heroGradient),
+    padding: EdgeInsets.fromLTRB(
+      20,
+      MediaQuery.paddingOf(context).top + 60,
+      20,
+      60,
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Text(
+          [
+                course['level'],
+                if (course['duration_hours'] != null)
+                  '${course['duration_hours']} hours',
+              ]
+              .where((v) => v != null && '$v'.isNotEmpty)
+              .join(' · ')
+              .toUpperCase(),
+          style: const TextStyle(
+            color: Brand.gold,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: progress.percent / 100,
+                  minHeight: 8,
+                  backgroundColor: Colors.white24,
+                  color: Brand.gold,
+                  semanticsLabel: 'Lesson completion',
                 ),
-                child: const Text('Submit written evidence'),
               ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              '${progress.percent}%',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ],
         ),
+        const SizedBox(height: 6),
+        Text(
+          '${progress.completed} of ${progress.total} lessons · ${progress.passed} of ${progress.assignments} assignments passed',
+          style: const TextStyle(color: Color(0xffd7e6dd), fontSize: 12),
+        ),
+      ],
+    ),
+  );
+}
+
+class _LessonTile extends StatelessWidget {
+  final int number;
+  final Map<String, dynamic> lesson;
+  final bool completed;
+  final bool next;
+  final bool saved;
+  final VoidCallback onTap;
+  const _LessonTile({
+    required this.number,
+    required this.lesson,
+    required this.completed,
+    required this.next,
+    required this.saved,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final locked = lesson['locked'] == true;
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: next ? Brand.green : Brand.line,
+          width: next ? 1.5 : 1,
+        ),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        onTap: locked ? null : onTap,
+        leading: CircleAvatar(
+          backgroundColor: completed
+              ? Brand.green
+              : (locked ? const Color(0xffeef1ee) : Brand.greenSoft),
+          foregroundColor: completed ? Colors.white : Brand.green,
+          child: completed
+              ? const Icon(Icons.check, size: 20)
+              : locked
+              ? const Icon(Icons.lock_outline, size: 18, color: Brand.muted)
+              : Text(
+                  '$number',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+        ),
+        title: Text(
+          '${lesson['title'] ?? 'Lesson $number'}',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(
+          locked
+              ? 'Locked'
+              : next
+              ? 'Up next'
+              : completed
+              ? 'Completed'
+              : '${lesson['media_type'] ?? 'Lesson'}'.replaceFirstMapped(
+                  RegExp(r'^.'),
+                  (m) => m[0]!.toUpperCase(),
+                ),
+        ),
+        trailing: saved
+            ? const Icon(
+                Icons.offline_pin,
+                color: Brand.green,
+                semanticLabel: 'Saved in the app',
+              )
+            : const Icon(Icons.chevron_right),
       ),
     );
   }
+}
 
-  Widget offlineVideoAction(BuildContext context, Map<String, dynamic> lesson) {
-    final id = lesson['id'].toString();
-    final cached = repo.hasCachedLearningFile('lessons', id);
-    final progress = videoDownloads[id];
-    if (cached) {
-      return Column(
+class _AssignmentCard extends StatelessWidget {
+  final Repository repo;
+  final Map<String, dynamic> assignment;
+  const _AssignmentCard({required this.repo, required this.assignment});
+
+  @override
+  Widget build(BuildContext context) {
+    final matches = repo
+        .rows('submissions')
+        .where((s) => '${s['assignment_id']}' == '${assignment['id']}');
+    final submission = matches.isEmpty ? null : matches.first;
+    final status = '${submission?['status'] ?? ''}';
+    return InfoCard(
+      title: '${assignment['title']}',
+      body: '${assignment['instructions'] ?? ''}',
+      action: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          FutureBuilder<int?>(
-            future: repo.cachedLearningFileSize('lessons', id),
-            builder: (context, snapshot) {
-              final size = snapshot.data;
-              final detail = size == null
-                  ? 'Saved for offline viewing'
-                  : 'Saved offline · ${formatBytes(size)}';
-              return Text(detail, textAlign: TextAlign.center);
-            },
-          ),
-          OutlinedButton.icon(
-            onPressed: () => run(context, () async {
-              final file = await repo.cachedLearningFile('lessons', id);
-              if (file == null) {
-                throw ApiFailure(
-                  'Download the video again to watch offline.',
-                  0,
-                );
-              }
-              final result = await OpenFilex.open(file.path);
-              if (result.type != ResultType.done) {
-                throw ApiFailure(result.message, 0);
-              }
-            }),
-            icon: const Icon(Icons.play_circle_outline),
-            label: const Text('Watch offline'),
-          ),
-          TextButton.icon(
-            onPressed: () async {
-              final remove = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Remove downloaded video?'),
-                  content: const Text(
-                    'This frees the video storage on this device. You can download it again later.',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Keep video'),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('Remove'),
-                    ),
-                  ],
-                ),
-              );
-              if (remove == true) {
-                await repo.removeCachedLearningFile('lessons', id);
-              }
-            },
-            icon: const Icon(Icons.delete_outline),
-            label: const Text('Remove download'),
-          ),
-        ],
-      );
-    }
-    if (progress != null) {
-      final compressing = compressingVideos.contains(id);
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          LinearProgressIndicator(
-            value: compressing || progress < 0 ? null : progress,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            compressing
-                ? 'Compressing for smaller offline storage…'
-                : progress < 0
-                ? 'Downloading video…'
-                : 'Downloading video · ${(progress * 100).round()}%',
-            textAlign: TextAlign.center,
-          ),
-        ],
-      );
-    }
-    return OutlinedButton.icon(
-      onPressed: () async {
-        final messenger = ScaffoldMessenger.of(context);
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Save video for offline use?'),
-            content: const Text(
-              'This downloads the video using mobile data if Wi-Fi is unavailable, then compresses it to up to 540p to reduce storage. Videos over 100 MB cannot be saved.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              StatusChip.neutral('Pass mark ${assignment['pass_mark']}%'),
+              StatusChip.neutral(
+                assignment['due_at'] == null
+                    ? 'No deadline'
+                    : 'Due ${shortDate(assignment['due_at'])}',
               ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Download'),
-              ),
+              if (submission != null)
+                status == 'passed'
+                    ? StatusChip(
+                        'Passed · ${submission['score'] ?? ''}%',
+                        icon: Icons.check_circle,
+                      )
+                    : StatusChip.warning(
+                        status == 'submitted'
+                            ? 'Awaiting review'
+                            : '${status[0].toUpperCase()}${status.substring(1)}',
+                      ),
             ],
           ),
-        );
-        if (confirmed != true || !mounted) return;
-        setState(() {
-          videoDownloads[id] = 0;
-          compressingVideos.remove(id);
-        });
-        try {
-          final savedFile = await repo.saveLessonVideoOffline(
-            id,
-            lesson['download_url'].toString(),
-            onDownloadProgress: (value) {
-              if (mounted) setState(() => videoDownloads[id] = value);
-            },
-            onCompressionStart: () {
-              if (mounted) setState(() => compressingVideos.add(id));
-            },
-          );
-          if (mounted) {
-            final size = await savedFile.length();
-            final wasCompressed = savedFile.path.endsWith('-offline.mp4');
-            messenger.showSnackBar(
-              SnackBar(
-                content: Text(
-                  '${wasCompressed ? 'Compressed' : 'Saved'} video for offline viewing · ${formatBytes(size)}',
+          if ((submission?['feedback'] ?? '').toString().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text('Feedback: ${submission!['feedback']}'),
+          ],
+          if (submission == null ||
+              status == 'returned' ||
+              status == 'failed') ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ActionForm(
+                    title: 'Submit practical work',
+                    action: 'submit',
+                    repo: repo,
+                    fixed: {'assignment_id': assignment['id']},
+                    offlineAllowed: true,
+                    fields: const [
+                      FormFieldSpec(
+                        'body',
+                        'Describe your practical work',
+                        multiline: true,
+                      ),
+                    ],
+                  ),
                 ),
-                duration: const Duration(seconds: 5),
               ),
-            );
-          }
-        } catch (error) {
-          if (mounted) {
-            messenger.showSnackBar(
-              SnackBar(
-                content: Text(error.toString()),
-                duration: const Duration(seconds: 5),
+              icon: const Icon(Icons.upload_outlined),
+              label: Text(
+                submission == null ? 'Submit written evidence' : 'Submit again',
               ),
-            );
-          }
-        } finally {
-          if (mounted) {
-            setState(() {
-              videoDownloads.remove(id);
-              compressingVideos.remove(id);
-            });
-          }
-        }
-      },
-      icon: const Icon(Icons.download_for_offline_outlined),
-      label: const Text('Download compressed video for offline'),
+            ),
+          ],
+        ],
+      ),
     );
   }
+}
 
-  String formatBytes(int bytes) {
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
+class _CertificateCard extends StatelessWidget {
+  final Repository repo;
+  final Map<String, dynamic> course;
+  final bool ready;
+  const _CertificateCard({
+    required this.repo,
+    required this.course,
+    required this.ready,
+  });
 
-  Future<void> run(BuildContext context, Future<void> Function() work) async {
-    try {
-      await work();
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    }
-  }
+  @override
+  Widget build(BuildContext context) => InfoCard(
+    leading: const CircleAvatar(
+      backgroundColor: Brand.goldSoft,
+      child: Icon(Icons.workspace_premium, color: Color(0xff8a6400)),
+    ),
+    title: 'Completion certificate',
+    body: ready
+        ? 'You have completed this course. View your certificate on the website (sign-in required).'
+        : 'Complete every lesson and pass the practical assignments to earn your certificate.',
+    action: OutlinedButton(
+      onPressed: !ready
+          ? null
+          : () => runGuarded(context, () async {
+              final error = ApiConfig.validate(repo.baseUrl);
+              if (error != null) throw ApiFailure(error, 0);
+              final opened = await launchUrl(
+                Uri.parse(
+                  '${repo.baseUrl.replaceFirst(RegExp(r'/api$'), '')}/certificates/${course['id']}',
+                ),
+                mode: LaunchMode.externalApplication,
+              );
+              if (!opened) {
+                throw ApiFailure('Could not open the certificate page.', 0);
+              }
+            }),
+      child: const Text('Completion certificate (web sign-in required)'),
+    ),
+  );
 }

@@ -6,24 +6,24 @@ import 'package:lwotowone_mobile/screens/login.dart';
 import 'package:lwotowone_mobile/screens/policy_reader.dart';
 import 'package:lwotowone_mobile/services/repository.dart';
 
+/// Opens a bottom-bar tab, or an activity from the Activities tab.
 Future<void> openSection(WidgetTester tester, String section) async {
-  await tester.tap(find.byTooltip('Open navigation menu'));
-  await tester.pumpAndSettle();
-  final link = find.descendant(
-    of: find.byType(Drawer),
-    matching: find.text(section),
-  );
-  await tester.scrollUntilVisible(
-    link,
-    120,
-    scrollable: find.descendant(
-      of: find.byType(Drawer),
-      matching: find.byType(Scrollable),
-    ),
-  );
-  await Scrollable.ensureVisible(tester.element(link), alignment: 0.5);
-  await tester.pumpAndSettle();
-  await tester.tap(link);
+  Future<void> tab(String label) async {
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text(label),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  if (['Courses', 'Activities', 'Inbox', 'Profile'].contains(section)) {
+    await tab(section);
+    return;
+  }
+  await tab('Activities');
+  await tester.tap(find.text(section).last);
   await tester.pumpAndSettle();
 }
 
@@ -137,7 +137,7 @@ void main() {
     );
     expect(find.textContaining('Free access:'), findsNothing);
 
-    await openSection(tester, 'Learn');
+    await openSection(tester, 'Courses');
     expect(
       find.text('This section opens once your learner profile is complete.'),
       findsOneWidget,

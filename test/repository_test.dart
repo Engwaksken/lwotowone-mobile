@@ -169,7 +169,7 @@ void main() {
       await repo.sync();
 
       expect(paths, ['/api/snapshot']);
-      expect(repo.hasCachedLearningFile('lessons', '17'), isFalse);
+      expect(repo.hasSavedFile('lessons', '17'), isFalse);
       repo.dispose();
       await directory.delete(recursive: true);
     },
